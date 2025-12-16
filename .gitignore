@@ -1,0 +1,12 @@
+/target
+.venv/
+cargo.def
+cargo.img
+ignore*
+slurm*
+brainstorming*
+tmp*
+coderabbit.md
+claude.md
+CLAUDE.md
+commit_message

@@ -1,0 +1,5 @@
+maturin==1.10.2
+patchelf==0.17.2.4
+polars==1.36.1
+polars-runtime-32==1.36.1
+tomli==2.3.0
