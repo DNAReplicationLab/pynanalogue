@@ -5,11 +5,24 @@
 //! and other miscellaneous information from BAM files. We expose some of
 //! these functions in a python package for usage by the python bioinformatics
 //! community.
+//!
+//! ## Design Philosophy: Many Parameters vs Parameter Objects
+//!
+//! The exported Python functions in this module accept numerous individual parameters
+//! (typically 15-20) rather than using parameter objects or configuration structs.
+//! This design intentionally prioritizes Python user experience over Rust code elegance.
+//! Most parameters are optional with sensible defaults, allowing Python users to write
+//! clear, self-documenting code like `read_info(bam_path, min_seq_len=1000, mapq_filter=20)`
+//! with full IDE autocomplete support. While this creates some code duplication in the
+//! Rust implementation, it provides a familiar, low-friction API that matches common
+//! patterns in scientific Python libraries. For a solo-maintained side project, this
+//! tradeoff values shipping a usable Python package over internal Rust maintainability.
 use nanalogue_core::{
     BamPreFilt as _, BamRcRecords, CurrRead, Error, F32Bw0and1, InputBam, InputBamBuilder,
     InputMods, InputModsBuilder, InputWindowingBuilder, OptionalTag, OrdPair, PathOrURLOrStdin,
-    ThresholdState, analysis, curr_reads_to_dataframe, nanalogue_indexed_bam_reader,
-    nanalogue_indexed_bam_reader_from_url, read_info as rust_read_info,
+    SimulationConfig, ThresholdState, analysis, curr_reads_to_dataframe,
+    nanalogue_indexed_bam_reader, nanalogue_indexed_bam_reader_from_url,
+    read_info as rust_read_info, simulate_mod_bam as rust_simulate_mod_bam,
     window_reads as rust_window_reads,
 };
 use pyo3::prelude::*;
@@ -41,6 +54,15 @@ macro_rules! py_value_error {
 }
 
 /// Parse input options and convert them into our `InputBam`, `InputMods` structs.
+///
+/// # Input Validation Strategy
+///
+/// This function does minimal validation at the Python wrapper level.
+/// Detailed input validation and error messages are provided by the underlying
+/// `nanalogue` Rust library. This avoids code duplication and ensures consistency
+/// between the Rust CLI and Python bindings. Invalid inputs (e.g., malformed
+/// region strings, invalid filter names) will produce descriptive error messages
+/// from the `nanalogue` library when the builder methods are called.
 #[expect(
     clippy::let_underscore_untyped,
     reason = "occasionally we will leave _ untyped"
@@ -48,7 +70,7 @@ macro_rules! py_value_error {
 #[expect(
     clippy::too_many_arguments,
     clippy::fn_params_excessive_bools,
-    reason = "we have no choice, python allows many args (most are optional). So we've to resort to this!"
+    reason = "See module-level doc 'Design Philosophy: Many Parameters vs Parameter Objects'"
 )]
 fn parse_input_options(
     bam_path: &str,
@@ -71,6 +93,14 @@ fn parse_input_options(
     base_qual_filter_mod: u8,
     mod_region: &str,
 ) -> PyResult<(InputBam, InputMods<OptionalTag>)> {
+    // Guard against zero-length reads until core is hardened
+    if include_zero_len {
+        return Err(py_value_error!(
+            "include_zero_len=True is not yet supported due to potential crashes in the underlying library. \
+             Please filter zero-length reads upstream or wait for this feature to be stabilized."
+        ));
+    }
+
     let mut bam_builder = InputBamBuilder::default();
     let _ = bam_builder
         .bam_path({
@@ -88,13 +118,32 @@ fn parse_input_options(
                 .ok_or(py_value_error!("threads must be a positive integer"))?,
         )
         .include_zero_len(include_zero_len)
-        .read_filter(read_filter.into())
+        .read_filter({
+            // Trim whitespace from comma-separated tokens
+            read_filter
+                .split(',')
+                .map(str::trim)
+                .collect::<Vec<_>>()
+                .join(",")
+        })
         .sample_fraction(F32Bw0and1::new(sample_fraction).map_err(|e| py_value_error!(e))?)
         .mapq_filter(mapq_filter)
         .exclude_mapq_unavail(exclude_mapq_unavail)
         .region(region.into())
         .full_region(full_region);
-    let _: Option<&mut _> = (min_align_len > 0).then(|| bam_builder.min_align_len(min_align_len));
+    // Validate and set min_align_len based on value
+    match min_align_len {
+        ..0 => {
+            return Err(py_value_error!(format!(
+                "min_align_len must be non-negative, got {}",
+                min_align_len
+            )));
+        }
+        0 => {} // Don't set if zero (default behavior)
+        v => {
+            let _ = bam_builder.min_align_len(v);
+        }
+    }
     let _: Option<&mut _> = (!read_ids.is_empty()).then(|| bam_builder.read_id_set(read_ids));
 
     let bam = bam_builder.build().map_err(|e| py_value_error!(e))?;
@@ -146,7 +195,11 @@ fn load_bam(bam: InputBam) -> PyResult<rust_htslib::bam::IndexedReader> {
         (None, PathOrURLOrStdin::URL(w)) => {
             nanalogue_indexed_bam_reader_from_url(&w, FetchDefinition::All)
         }
-        _ => unreachable!("we don't allow the PathOrURLOrStdin::Stdin variant here"),
+        _ => {
+            return Err(py_value_error!(
+                "Stdin input not supported for indexed BAM reading"
+            ));
+        }
     }
     .map_err(|e: Error| py_io_error!(e))?;
     Ok(reader)
@@ -168,55 +221,55 @@ fn load_bam(bam: InputBam) -> PyResult<rust_htslib::bam::IndexedReader> {
 /// the BAM data (e.g. passing through a specific region etc.).
 ///
 /// # Args
-///     bam_path (str): Path to the BAM file. Must be associated with a BAM index.
-///     treat_as_url (optional, bool): If True, treat `bam_path` as a URL, default False.
-///     min_seq_len (optional, int): Only retain sequences above this length, default 0.
-///     min_align_len (optional, int): Only retain sequences with an alignment length above this
-///         value. Defaults to unused.
-///     read_ids (optional, set of str): Only retrieve these read ids, defaults to unused.
-///     threads (optional, int): Number of threads used in some aspects of program execution, defaults to 2.
-///     include_zero_len (optional, bool): Include sequences of zero length. WARNING: our program
-///         may crash if you do this. Defaults to False. Helps to check if sequences of zero length
-///         exist in our BAM file.
-///     read_filter (optional, str): Comma-separated sequence of one to many of the following
-///         strings: primary_forward, primary_reverse, secondary_forward, secondary_reverse,
-///         supplementary_forward, supplementary_reverse, unmapped. If specified, only reads
-///         with a mapping belonging to this set are retained. Defaults to no filter.
-///     sample_fraction (optional, float): Set to between 0 and 1 to subsample BAM file.
-///         WARNING: seeds are not set, so you may get a new set of reads every time.
-///         WARNING: we sample every read with the given probability, so the total number
-///             of reads fluctuates according to standard counting statistics.
-///     mapq_filter (optional, int): Exclude reads with mapping quality below this number.
-///         defaults to unused.
-///     exclude_mapq_unavail (optional, bool): Exclude reads where mapping quality is unavailable.
-///         defaults to false.
-///     region (optional, str): Only include reads with at least one mapped base from this region.
-///         Use the format "contig", "contig:start-", or "contig:start-end". These are 0-based,
-///         half-open intervals. Defaults to read entire BAM file. Can be used in combination
-///         with `mod_region`.
-///     full_region (optional, bool): Only include reads if they pass through the region above
-///         in full. Defaults to false.
-///     mod_strand (optional, str): Set this to `bc` or `bc_comp` to retrieve information
-///         about mods only from the basecalled strand or only from its complement.
-///         Some sequencing technologies like `PacBio` or `ONT duplex` record mod information
-///         both on a strand and its complement. It may be useful in some scenarios to
-///         separate this information. Defaults to not filter.
-///     min_mod_qual (optional, int): Set to a number 0-255. Reject modification
-///         calls whose probability is below this value (0, 255 correspond to a
-///         probability of 0 and 1 respectively). Defaults to 0.
-///     reject_mod_qual_non_inclusive (optional, (int, int)): Reject modification
-///         calls whose probability is such that int_low < prob < int_high.
-///         Set both to a number between 0-255 and such that the first entry is <=
-///         the second (if they are equal, no filtering is performed). Defaults
-///         to no filtering. Also see comments under `min_mod_qual`.
-///     trim_read_ends_mod (optional, int): Reject modification information
-///         within so many bp of either end of the read. Defaults to 0.
-///     base_qual_filter_mod (optional, int): Reject modification information
-///         on any base whose basecalling quality is below this number. Defaults to 0.
-///     mod_region (optional, str): Genomic region in the format "contig",
-///         "contig:start-" or "contig:start-end". Reject any modification information
-///         outside this region. These are half-open, 0-based intervals.
-///         Can be used in combination with `region`.
+/// bam_path (str): Path to the BAM file. Must be associated with a BAM index.
+/// treat_as_url (optional, bool): If True, treat `bam_path` as a URL, default False.
+/// min_seq_len (optional, int): Only retain sequences above this length, default 0.
+/// min_align_len (optional, int): Only retain sequences with an alignment length above this
+///     value. Defaults to unused.
+/// read_ids (optional, set of str): Only retrieve these read ids, defaults to unused.
+/// threads (optional, int): Number of threads used in some aspects of program execution, defaults to 2.
+/// include_zero_len (optional, bool): Include sequences of zero length. WARNING: our program
+///     may crash if you do this. Defaults to False. Helps to check if sequences of zero length
+///     exist in our BAM file.
+/// read_filter (optional, str): Comma-separated sequence of one to many of the following
+///     strings: primary_forward, primary_reverse, secondary_forward, secondary_reverse,
+///     supplementary_forward, supplementary_reverse, unmapped. If specified, only reads
+///     with a mapping belonging to this set are retained. Defaults to no filter.
+/// sample_fraction (optional, float): Set to between 0 and 1 to subsample BAM file.
+///     WARNING: seeds are not set, so you may get a new set of reads every time.
+///     WARNING: we sample every read with the given probability, so the total number
+///         of reads fluctuates according to standard counting statistics.
+/// mapq_filter (optional, int): Exclude reads with mapping quality below this number.
+///     defaults to unused.
+/// exclude_mapq_unavail (optional, bool): Exclude reads where mapping quality is unavailable.
+///     defaults to false.
+/// region (optional, str): Only include reads with at least one mapped base from this region.
+///     Use the format "contig", "contig:start-", or "contig:start-end". These are 0-based,
+///     half-open intervals. Defaults to read entire BAM file. Can be used in combination
+///     with `mod_region`.
+/// full_region (optional, bool): Only include reads if they pass through the region above
+///     in full. Defaults to false.
+/// mod_strand (optional, str): Set this to `bc` or `bc_comp` to retrieve information
+///     about mods only from the basecalled strand or only from its complement.
+///     Some sequencing technologies like `PacBio` or `ONT duplex` record mod information
+///     both on a strand and its complement. It may be useful in some scenarios to
+///     separate this information. Defaults to not filter.
+/// min_mod_qual (optional, int): Set to a number 0-255. Reject modification
+///     calls whose probability is below this value (0, 255 correspond to a
+///     probability of 0 and 1 respectively). Defaults to 0.
+/// reject_mod_qual_non_inclusive (optional, (int, int)): Reject modification
+///     calls whose probability is such that int_low < prob < int_high.
+///     Set both to a number between 0-255 and such that the first entry is <=
+///     the second (if they are equal, no filtering is performed). Defaults
+///     to no filtering. Also see comments under `min_mod_qual`.
+/// trim_read_ends_mod (optional, int): Reject modification information
+///     within so many bp of either end of the read. Defaults to 0.
+/// base_qual_filter_mod (optional, int): Reject modification information
+///     on any base whose basecalling quality is below this number. Defaults to 0.
+/// mod_region (optional, str): Genomic region in the format "contig",
+///     "contig:start-" or "contig:start-end". Reject any modification information
+///     outside this region. These are half-open, 0-based intervals.
+///     Can be used in combination with `region`.
 ///
 /// # Returns
 ///
@@ -228,22 +281,22 @@ fn load_bam(bam: InputBam) -> PyResult<rust_htslib::bam::IndexedReader> {
 ///
 /// ```python
 /// import json
-/// // assume the function output is in out
-/// decoded_output = json.loads(bytearray(out))
+/// # Assume the function output is in 'result_bytes'
+/// decoded_output = json.loads(result_bytes)
 /// ```
 /// A record from the decoded output might look like
 ///
 /// ```json
 /// [
 /// {
-///        "read_id": "cd623d4a-510d-4c6c-9d88-10eb475ac59d",
-///        "sequence_length": 2104,
-///        "contig": "contig_0",
-///        "reference_start": 7369,
-///        "reference_end": 9473,
-///        "alignment_length": 2104,
-///        "alignment_type": "primary_reverse",
-///        "mod_count": "C-m:263;N+N:2104;(probabilities >= 0.5020, PHRED base qual >= 0)"
+///    "read_id": "cd623d4a-510d-4c6c-9d88-10eb475ac59d",
+///    "sequence_length": 2104,
+///    "contig": "contig_0",
+///    "reference_start": 7369,
+///    "reference_end": 9473,
+///    "alignment_length": 2104,
+///    "alignment_type": "primary_reverse",
+///    "mod_count": "C-m:263;N+N:2104;(probabilities >= 0.5020, PHRED base qual >= 0)"
 /// }
 /// ]
 /// ```
@@ -255,9 +308,13 @@ fn load_bam(bam: InputBam) -> PyResult<rust_htslib::bam::IndexedReader> {
 /// cannot be obtained, if preparing records fails, or running the
 /// `nanalogue_core::read_info::run` function fails
 #[expect(
+    clippy::doc_markdown,
+    reason = "Python bindings use Python-style documentation conventions"
+)]
+#[expect(
     clippy::too_many_arguments,
     clippy::fn_params_excessive_bools,
-    reason = "python functions have many more args than rust, o.k. as some are optional"
+    reason = "See module-level doc 'Design Philosophy: Many Parameters vs Parameter Objects'"
 )]
 #[pyfunction]
 #[pyo3(signature = (bam_path, treat_as_url = false, min_seq_len = 0, min_align_len = 0,
@@ -325,7 +382,7 @@ fn read_info(
         bam_rc_records
             .rc_records
             .filter(|r| r.as_ref().map_or(true, |v| v.pre_filt(&bam))),
-        &mods,
+        mods,
         None,
     )
     .map_err(|e| py_exception!(e))?;
@@ -341,61 +398,61 @@ fn read_info(
 /// the function and capturing the output (see `Example Output`).
 ///
 /// # Args
-///     bam_path (str): Path to the BAM file. Must be associated with a BAM index.
-///     win (int): Size of window in number of bases whose mod is being queried.
-///         i.e. let's say a read contains cytosine mods and win is set to 10,
-///         then each window is chosen so that there are 10 cytosines in it.
-///         If a read has multiple mods, then multiple windows are set up such that
-///         each window has the specified number of bases of that type in it.
-///     step (int): Length by which the window is slid in the same units as win above.
-///     treat_as_url (optional, bool): If True, treat `bam_path` as a URL, default False.
-///     min_seq_len (optional, int): Only retain sequences above this length, default 0.
-///     min_align_len (optional, int): Only retain sequences with an alignment length above this
-///         value. Defaults to unused.
-///     read_ids (optional, set of str): Only retrieve these read ids, defaults to unused.
-///     threads (optional, int): Number of threads used in some aspects of program execution, defaults to 2.
-///     include_zero_len (optional, bool): Include sequences of zero length. WARNING: our program
-///         may crash if you do this. Defaults to False. Helps to check if sequences of zero length
-///         exist in our BAM file.
-///     read_filter (optional, str): Comma-separated sequence of one to many of the following
-///         strings: primary_forward, primary_reverse, secondary_forward, secondary_reverse,
-///         supplementary_forward, supplementary_reverse, unmapped. If specified, only reads
-///         with a mapping belonging to this set are retained. Defaults to no filter.
-///     sample_fraction (optional, float): Set to between 0 and 1 to subsample BAM file.
-///         WARNING: seeds are not set, so you may get a new set of reads every time.
-///         WARNING: we sample every read with the given probability, so the total number
-///             of reads fluctuates according to standard counting statistics.
-///     mapq_filter (optional, int): Exclude reads with mapping quality below this number.
-///         defaults to unused.
-///     exclude_mapq_unavail (optional, bool): Exclude reads where mapping quality is unavailable.
-///         defaults to false.
-///     region (optional, str): Only include reads with at least one mapped base from this region.
-///         Use the format "contig", "contig:start-", or "contig:start-end". These are 0-based,
-///         half-open intervals. Defaults to read entire BAM file. Can be used in combination
-///         with `mod_region`.
-///     full_region (optional, bool): Only include reads if they pass through the region above
-///         in full. Defaults to false.
-///     mod_strand (optional, str): Set this to `bc` or `bc_comp` to retrieve information
-///         about mods only from the basecalled strand or only from its complement.
-///         Some sequencing technologies like `PacBio` or `ONT duplex` record mod information
-///         both on a strand and its complement. It may be useful in some scenarios to
-///         separate this information. Defaults to not filter.
-///     min_mod_qual (optional, int): Set to a number 0-255. Reject modification
-///         calls whose probability is below this value (0, 255 correspond to a
-///         probability of 0 and 1 respectively). Defaults to 0.
-///     reject_mod_qual_non_inclusive (optional, (int, int)): Reject modification
-///         calls whose probability is such that int_low < prob < int_high.
-///         Set both to a number between 0-255 and such that the first entry is <=
-///         the second (if they are equal, no filtering is performed). Defaults
-///         to no filtering. Also see comments under `min_mod_qual`.
-///     trim_read_ends_mod (optional, int): Reject modification information
-///         within so many bp of either end of the read. Defaults to 0.
-///     base_qual_filter_mod (optional, int): Reject modification information
-///         on any base whose basecalling quality is below this number. Defaults to 0.
-///     mod_region (optional, str): Genomic region in the format "contig",
-///         "contig:start-" or "contig:start-end". Reject any modification information
-///         outside this region. These are half-open, 0-based intervals.
-///         Can be used in combination with `region`.
+/// bam_path (str): Path to the BAM file. Must be associated with a BAM index.
+/// win (int): Size of window in number of bases whose mod is being queried.
+///     i.e. let's say a read contains cytosine mods and win is set to 10,
+///     then each window is chosen so that there are 10 cytosines in it.
+///     If a read has multiple mods, then multiple windows are set up such that
+///     each window has the specified number of bases of that type in it.
+/// step (int): Length by which the window is slid in the same units as win above.
+/// treat_as_url (optional, bool): If True, treat `bam_path` as a URL, default False.
+/// min_seq_len (optional, int): Only retain sequences above this length, default 0.
+/// min_align_len (optional, int): Only retain sequences with an alignment length above this
+///     value. Defaults to unused.
+/// read_ids (optional, set of str): Only retrieve these read ids, defaults to unused.
+/// threads (optional, int): Number of threads used in some aspects of program execution, defaults to 2.
+/// include_zero_len (optional, bool): Include sequences of zero length. WARNING: our program
+///     may crash if you do this. Defaults to False. Helps to check if sequences of zero length
+///     exist in our BAM file.
+/// read_filter (optional, str): Comma-separated sequence of one to many of the following
+///     strings: primary_forward, primary_reverse, secondary_forward, secondary_reverse,
+///     supplementary_forward, supplementary_reverse, unmapped. If specified, only reads
+///     with a mapping belonging to this set are retained. Defaults to no filter.
+/// sample_fraction (optional, float): Set to between 0 and 1 to subsample BAM file.
+///     WARNING: seeds are not set, so you may get a new set of reads every time.
+///     WARNING: we sample every read with the given probability, so the total number
+///         of reads fluctuates according to standard counting statistics.
+/// mapq_filter (optional, int): Exclude reads with mapping quality below this number.
+///     defaults to unused.
+/// exclude_mapq_unavail (optional, bool): Exclude reads where mapping quality is unavailable.
+///     defaults to false.
+/// region (optional, str): Only include reads with at least one mapped base from this region.
+///     Use the format "contig", "contig:start-", or "contig:start-end". These are 0-based,
+///     half-open intervals. Defaults to read entire BAM file. Can be used in combination
+///     with `mod_region`.
+/// full_region (optional, bool): Only include reads if they pass through the region above
+///     in full. Defaults to false.
+/// mod_strand (optional, str): Set this to `bc` or `bc_comp` to retrieve information
+///     about mods only from the basecalled strand or only from its complement.
+///     Some sequencing technologies like `PacBio` or `ONT duplex` record mod information
+///     both on a strand and its complement. It may be useful in some scenarios to
+///     separate this information. Defaults to not filter.
+/// min_mod_qual (optional, int): Set to a number 0-255. Reject modification
+///     calls whose probability is below this value (0, 255 correspond to a
+///     probability of 0 and 1 respectively). Defaults to 0.
+/// reject_mod_qual_non_inclusive (optional, (int, int)): Reject modification
+///     calls whose probability is such that int_low < prob < int_high.
+///     Set both to a number between 0-255 and such that the first entry is <=
+///     the second (if they are equal, no filtering is performed). Defaults
+///     to no filtering. Also see comments under `min_mod_qual`.
+/// trim_read_ends_mod (optional, int): Reject modification information
+///     within so many bp of either end of the read. Defaults to 0.
+/// base_qual_filter_mod (optional, int): Reject modification information
+///     on any base whose basecalling quality is below this number. Defaults to 0.
+/// mod_region (optional, str): Genomic region in the format "contig",
+///     "contig:start-" or "contig:start-end". Reject any modification information
+///     outside this region. These are half-open, 0-based intervals.
+///     Can be used in combination with `region`.
 ///
 /// # Returns
 ///
@@ -419,9 +476,13 @@ fn read_info(
 /// cannot be obtained, if preparing records fails, or running the
 /// `nanalogue_core::window_reads::run_df` function fails
 #[expect(
+    clippy::doc_markdown,
+    reason = "Python bindings use Python-style documentation conventions"
+)]
+#[expect(
     clippy::too_many_arguments,
     clippy::fn_params_excessive_bools,
-    reason = "python functions have many more args than rust, o.k. as some are optional"
+    reason = "See module-level doc 'Design Philosophy: Many Parameters vs Parameter Objects'"
 )]
 #[pyfunction]
 #[pyo3(signature = (bam_path, win, step, treat_as_url = false, min_seq_len = 0, min_align_len = 0,
@@ -514,55 +575,55 @@ fn window_reads(
 /// Parses records, collects them, and runs `nanalogue_core::read_utils::curr_reads_to_dataframe`.
 ///
 /// # Args
-///     bam_path (str): Path to the BAM file. Must be associated with a BAM index.
-///     treat_as_url (optional, bool): If True, treat `bam_path` as a URL, default False.
-///     min_seq_len (optional, int): Only retain sequences above this length, default 0.
-///     min_align_len (optional, int): Only retain sequences with an alignment length above this
-///         value. Defaults to unused.
-///     read_ids (optional, set of str): Only retrieve these read ids, defaults to unused.
-///     threads (optional, int): Number of threads used in some aspects of program execution, defaults to 2.
-///     include_zero_len (optional, bool): Include sequences of zero length. WARNING: our program
-///         may crash if you do this. Defaults to False. Helps to check if sequences of zero length
-///         exist in our BAM file.
-///     read_filter (optional, str): Comma-separated sequence of one to many of the following
-///         strings: primary_forward, primary_reverse, secondary_forward, secondary_reverse,
-///         supplementary_forward, supplementary_reverse, unmapped. If specified, only reads
-///         with a mapping belonging to this set are retained. Defaults to no filter.
-///     sample_fraction (optional, float): Set to between 0 and 1 to subsample BAM file.
-///         WARNING: seeds are not set, so you may get a new set of reads every time.
-///         WARNING: we sample every read with the given probability, so the total number
-///             of reads fluctuates according to standard counting statistics.
-///     mapq_filter (optional, int): Exclude reads with mapping quality below this number.
-///         defaults to unused.
-///     exclude_mapq_unavail (optional, bool): Exclude reads where mapping quality is unavailable.
-///         defaults to false.
-///     region (optional, str): Only include reads with at least one mapped base from this region.
-///         Use the format "contig", "contig:start-", or "contig:start-end". These are 0-based,
-///         half-open intervals. Defaults to read entire BAM file. Can be used in combination
-///         with `mod_region`.
-///     full_region (optional, bool): Only include reads if they pass through the region above
-///         in full. Defaults to false.
-///     mod_strand (optional, str): Set this to `bc` or `bc_comp` to retrieve information
-///         about mods only from the basecalled strand or only from its complement.
-///         Some sequencing technologies like `PacBio` or `ONT duplex` record mod information
-///         both on a strand and its complement. It may be useful in some scenarios to
-///         separate this information. Defaults to not filter.
-///     min_mod_qual (optional, int): Set to a number 0-255. Reject modification
-///         calls whose probability is below this value (0, 255 correspond to a
-///         probability of 0 and 1 respectively). Defaults to 0.
-///     reject_mod_qual_non_inclusive (optional, (int, int)): Reject modification
-///         calls whose probability is such that int_low < prob < int_high.
-///         Set both to a number between 0-255 and such that the first entry is <=
-///         the second (if they are equal, no filtering is performed). Defaults
-///         to no filtering. Also see comments under `min_mod_qual`.
-///     trim_read_ends_mod (optional, int): Reject modification information
-///         within so many bp of either end of the read. Defaults to 0.
-///     base_qual_filter_mod (optional, int): Reject modification information
-///         on any base whose basecalling quality is below this number. Defaults to 0.
-///     mod_region (optional, str): Genomic region in the format "contig",
-///         "contig:start-" or "contig:start-end". Reject any modification information
-///         outside this region. These are half-open, 0-based intervals.
-///         Can be used in combination with `region`.
+/// bam_path (str): Path to the BAM file. Must be associated with a BAM index.
+/// treat_as_url (optional, bool): If True, treat `bam_path` as a URL, default False.
+/// min_seq_len (optional, int): Only retain sequences above this length, default 0.
+/// min_align_len (optional, int): Only retain sequences with an alignment length above this
+///     value. Defaults to unused.
+/// read_ids (optional, set of str): Only retrieve these read ids, defaults to unused.
+/// threads (optional, int): Number of threads used in some aspects of program execution, defaults to 2.
+/// include_zero_len (optional, bool): Include sequences of zero length. WARNING: our program
+///     may crash if you do this. Defaults to False. Helps to check if sequences of zero length
+///     exist in our BAM file.
+/// read_filter (optional, str): Comma-separated sequence of one to many of the following
+///     strings: primary_forward, primary_reverse, secondary_forward, secondary_reverse,
+///     supplementary_forward, supplementary_reverse, unmapped. If specified, only reads
+///     with a mapping belonging to this set are retained. Defaults to no filter.
+/// sample_fraction (optional, float): Set to between 0 and 1 to subsample BAM file.
+///     WARNING: seeds are not set, so you may get a new set of reads every time.
+///     WARNING: we sample every read with the given probability, so the total number
+///         of reads fluctuates according to standard counting statistics.
+/// mapq_filter (optional, int): Exclude reads with mapping quality below this number.
+///     defaults to unused.
+/// exclude_mapq_unavail (optional, bool): Exclude reads where mapping quality is unavailable.
+///     defaults to false.
+/// region (optional, str): Only include reads with at least one mapped base from this region.
+///     Use the format "contig", "contig:start-", or "contig:start-end". These are 0-based,
+///     half-open intervals. Defaults to read entire BAM file. Can be used in combination
+///     with `mod_region`.
+/// full_region (optional, bool): Only include reads if they pass through the region above
+///     in full. Defaults to false.
+/// mod_strand (optional, str): Set this to `bc` or `bc_comp` to retrieve information
+///     about mods only from the basecalled strand or only from its complement.
+///     Some sequencing technologies like `PacBio` or `ONT duplex` record mod information
+///     both on a strand and its complement. It may be useful in some scenarios to
+///     separate this information. Defaults to not filter.
+/// min_mod_qual (optional, int): Set to a number 0-255. Reject modification
+///     calls whose probability is below this value (0, 255 correspond to a
+///     probability of 0 and 1 respectively). Defaults to 0.
+/// reject_mod_qual_non_inclusive (optional, (int, int)): Reject modification
+///     calls whose probability is such that int_low < prob < int_high.
+///     Set both to a number between 0-255 and such that the first entry is <=
+///     the second (if they are equal, no filtering is performed). Defaults
+///     to no filtering. Also see comments under `min_mod_qual`.
+/// trim_read_ends_mod (optional, int): Reject modification information
+///     within so many bp of either end of the read. Defaults to 0.
+/// base_qual_filter_mod (optional, int): Reject modification information
+///     on any base whose basecalling quality is below this number. Defaults to 0.
+/// mod_region (optional, str): Genomic region in the format "contig",
+///     "contig:start-" or "contig:start-end". Reject any modification information
+///     outside this region. These are half-open, 0-based intervals.
+///     Can be used in combination with `region`.
 ///
 /// # Returns
 ///
@@ -575,9 +636,13 @@ fn window_reads(
 /// cannot be obtained, if preparing records fails, or running the
 /// `nanalogue_core` commands fail
 #[expect(
+    clippy::doc_markdown,
+    reason = "Python bindings use Python-style documentation conventions"
+)]
+#[expect(
     clippy::too_many_arguments,
     clippy::fn_params_excessive_bools,
-    reason = "python functions have many more args than rust, o.k. as some are optional"
+    reason = "See module-level doc 'Design Philosophy: Many Parameters vs Parameter Objects'"
 )]
 #[pyfunction]
 #[pyo3(signature = (bam_path, treat_as_url = false, min_seq_len = 0, min_align_len = 0,
@@ -653,10 +718,108 @@ fn polars_bam_mods(
         df_collection.push(curr_read);
     }
 
+    // Convert to DataFrame
+    let df =
+        curr_reads_to_dataframe(df_collection.as_slice()).map_err(|e: Error| py_exception!(e))?;
+
     // return output
-    Ok(PyDataFrame(
-        curr_reads_to_dataframe(df_collection.as_slice()).map_err(|e: Error| py_exception!(e))?,
-    ))
+    Ok(PyDataFrame(df))
+}
+
+/// Simulates a BAM file with or without modifications based on a JSON configuration.
+/// Creates both a BAM file and a corresponding FASTA reference file.
+///
+/// This function takes a JSON configuration string that specifies how to generate
+/// synthetic sequencing data, including contig specifications, read parameters,
+/// and optional modification patterns. The output includes a sorted, indexed BAM
+/// file and a FASTA reference file.
+///
+/// # Args
+/// json_config (str): JSON string containing the simulation configuration.
+///     Must conform to the `SimulationConfig` schema. The JSON should specify
+///     (some inputs may be optional):
+///     - `contigs`: Configuration for generating reference sequences
+///         - `number`: Number of contigs to generate
+///         - `len_range`: Range of contig lengths [min, max]
+///         - `repeated_seq`: Sequence pattern to repeat for contig generation.
+///             If not specified, random DNA sequences are generated.
+///     - `reads`: Array of read group specifications, each containing:
+///         - `number`: Number of reads to generate
+///         - `mapq_range`: Range of mapping quality values [min, max]
+///         - `base_qual_range`: Range of base quality values [min, max]
+///         - `len_range`: Range of read lengths as fraction of contig [min, max]
+///         - `barcode`: Optional barcode sequence
+///         - `mods`: Optional array of modification specifications
+/// bam_path (str): Output path for the BAM file. If the file exists, it will be overwritten.
+///     A corresponding `.bai` index file will be created automatically.
+/// fasta_path (str): Output path for the FASTA reference file. If the file exists,
+///     it will be overwritten.
+///
+/// # Returns
+///
+/// Returns None on success. The function creates two files on disk:
+/// - A sorted, indexed BAM file at `bam_path` (with accompanying `.bai` index)
+/// - A FASTA reference file at `fasta_path`
+///
+/// # Example
+///
+/// ```python
+/// import pynanalogue
+///
+/// json_config = '''
+/// {
+/// "contigs": {
+///     "number": 2,
+///     "len_range": [100, 200],
+///     "repeated_seq": "ACGTACGT"
+/// },
+/// "reads": [
+///     {
+///         "number": 10,
+///         "mapq_range": [10, 30],
+///         "base_qual_range": [20, 40],
+///         "len_range": [0.1, 0.9],
+///         "barcode": "ACGTAA",
+///         "mods": [{
+///             "base": "C",
+///             "is_strand_plus": true,
+///             "mod_code": "m",
+///             "win": [5, 3],
+///             "mod_range": [[0.3, 0.7], [0.1, 0.5]]
+///         }]
+///     }
+/// ]
+/// }
+/// '''
+///
+/// pynanalogue.simulate_mod_bam(
+/// json_config=json_config,
+/// bam_path="output.bam",
+/// fasta_path="output.fasta"
+/// )
+/// ```
+///
+/// # Errors
+/// Returns a Python exception if:
+/// - The JSON configuration is invalid or cannot be parsed
+/// - The JSON structure doesn't match the expected `SimulationConfig` schema
+/// - File I/O operations fail (e.g., permission issues, disk full)
+/// - BAM or FASTA generation fails due to invalid configuration parameters
+#[expect(
+    clippy::doc_markdown,
+    reason = "Python bindings use Python-style documentation conventions"
+)]
+#[pyfunction]
+#[pyo3(signature = (json_config, bam_path, fasta_path))]
+fn simulate_mod_bam(json_config: &str, bam_path: &str, fasta_path: &str) -> PyResult<()> {
+    // Parse JSON string into SimulationConfig
+    let config: SimulationConfig =
+        serde_json::from_str(json_config).map_err(|e| py_value_error!(e))?;
+
+    // Run the simulation
+    rust_simulate_mod_bam::run(config, bam_path, fasta_path).map_err(|e| py_exception!(e))?;
+
+    Ok(())
 }
 
 /// Our python module; calls our rust functions
@@ -668,6 +831,7 @@ fn pynanalogue(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(read_info, m)?)?;
     m.add_function(wrap_pyfunction!(window_reads, m)?)?;
     m.add_function(wrap_pyfunction!(polars_bam_mods, m)?)?;
+    m.add_function(wrap_pyfunction!(simulate_mod_bam, m)?)?;
 
     Ok(())
 }

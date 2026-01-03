@@ -1,0 +1,5 @@
+read_id	seq_len	alignment_type	align_start	align_end	contig	contig_id	base	is_strand_plus	mod_code	position	ref_position	mod_quality
+read1	7	primary_forward	9	17	dummyI	0	T	true	T	0	9	4
+read1	7	primary_forward	9	17	dummyI	0	T	true	T	2	12	7
+read1	7	primary_forward	9	17	dummyI	0	T	true	T	3	13	9
+read1	7	primary_forward	9	17	dummyI	0	T	true	T	6	16	6

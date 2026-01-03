@@ -1,0 +1,102 @@
+[
+{
+	"read_id": "read001",
+	"sequence_length": 10,
+	"contig": "dummyI",
+	"reference_start": 0,
+	"reference_end": 10,
+	"alignment_length": 10,
+	"alignment_type": "primary_forward",
+	"mod_count": "NA"
+},
+{
+	"read_id": "read002",
+	"sequence_length": 8,
+	"contig": "dummyI",
+	"reference_start": 4,
+	"reference_end": 12,
+	"alignment_length": 8,
+	"alignment_type": "secondary_forward",
+	"mod_count": "NA"
+},
+{
+	"read_id": "read003",
+	"sequence_length": 6,
+	"contig": "dummyI",
+	"reference_start": 9,
+	"reference_end": 15,
+	"alignment_length": 6,
+	"alignment_type": "primary_reverse",
+	"mod_count": "NA"
+},
+{
+	"read_id": "read004",
+	"sequence_length": 15,
+	"contig": "dummyII",
+	"reference_start": 0,
+	"reference_end": 15,
+	"alignment_length": 15,
+	"alignment_type": "primary_forward",
+	"mod_count": "NA"
+},
+{
+	"read_id": "read005",
+	"sequence_length": 12,
+	"contig": "dummyII",
+	"reference_start": 19,
+	"reference_end": 31,
+	"alignment_length": 12,
+	"alignment_type": "primary_forward",
+	"mod_count": "NA"
+},
+{
+	"read_id": "read006",
+	"sequence_length": 10,
+	"contig": "dummyII",
+	"reference_start": 29,
+	"reference_end": 39,
+	"alignment_length": 10,
+	"alignment_type": "secondary_reverse",
+	"mod_count": "NA"
+},
+{
+	"read_id": "read007",
+	"sequence_length": 20,
+	"contig": "dummyIII",
+	"reference_start": 0,
+	"reference_end": 20,
+	"alignment_length": 20,
+	"alignment_type": "supplementary_forward",
+	"mod_count": "NA"
+},
+{
+	"read_id": "read008",
+	"sequence_length": 15,
+	"contig": "dummyIII",
+	"reference_start": 24,
+	"reference_end": 39,
+	"alignment_length": 15,
+	"alignment_type": "primary_forward",
+	"mod_count": "NA"
+},
+{
+	"read_id": "read009",
+	"sequence_length": 18,
+	"contig": "dummyIII",
+	"reference_start": 39,
+	"reference_end": 57,
+	"alignment_length": 18,
+	"alignment_type": "supplementary_reverse",
+	"mod_count": "NA"
+},
+{
+	"read_id": "read010",
+	"sequence_length": 12,
+	"contig": "dummyIII",
+	"reference_start": 54,
+	"reference_end": 66,
+	"alignment_length": 12,
+	"alignment_type": "primary_forward",
+	"mod_count": "NA"
+}
+]

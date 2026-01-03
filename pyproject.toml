@@ -2,10 +2,56 @@
 requires = ["maturin>=1.0,<2.0"]
 build-backend = "maturin"
 
+[project]
+name = "pynanalogue"
+version = "0.1.0"
+description = "Python bindings for Nanalogue: single-molecule BAM/Mod-BAM analysis"
+readme = "README.md"
+requires-python = ">=3.9"
+license = {text = "MIT"}
+authors = [
+    {name = "Sathish Thiyagarajan", email = "mail@unintegrable.com"},
+]
+maintainers = [
+    {name = "Sathish Thiyagarajan", email = "mail@unintegrable.com"},
+]
+keywords = [
+    "bioinformatics",
+    "genomics",
+    "bam",
+    "modifications",
+    "single-molecule",
+    "nanopore",
+]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: Science/Research",
+    "Topic :: Scientific/Engineering :: Bio-Informatics",
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Rust",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.9",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+]
+dependencies = [
+    "polars>=1.36.1",
+]
+
+[project.urls]
+Homepage = "https://github.com/DNAReplicationLab/pynanalogue"
+Repository = "https://github.com/DNAReplicationLab/pynanalogue"
+Issues = "https://github.com/DNAReplicationLab/pynanalogue/issues"
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=7.0",
+    "pytest-cov>=4.0",
+    "pytest-benchmark>=4.0",
+    "ruff>=0.1.0",
+]
+
 [tool.maturin]
-features = ["pyo3/extension-module"]
-codegen-units = 1
-lto = "fat"
-opt-level = "z"
-panic = "abort"
-strip = true 
+features = ["pyo3/extension-module"] 

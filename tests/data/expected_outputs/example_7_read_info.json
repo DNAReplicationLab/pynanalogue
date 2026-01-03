@@ -1,0 +1,12 @@
+[
+{
+	"read_id": "read1",
+	"sequence_length": 7,
+	"contig": "dummyI",
+	"reference_start": 9,
+	"reference_end": 17,
+	"alignment_length": 8,
+	"alignment_type": "primary_forward",
+	"mod_count": "T+T:0;(probabilities >= 0.5020, PHRED base qual >= 0)"
+}
+]

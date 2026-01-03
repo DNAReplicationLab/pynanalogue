@@ -1,6 +1,6 @@
 [package]
 name = "pynanalogue"
-version = "0.0.1"
+version = "0.1.0"
 edition = "2024"
 
 [lib]
@@ -8,11 +8,12 @@ name = "pynanalogue"
 crate-type = ["cdylib", "lib"]
 
 [dependencies]
-nanalogue = { git = "https://github.com/DNAReplicationLab/nanalogue.git" }
+nanalogue = "0.1.2"
 polars = "0.51"
 rust-htslib = "0.46.0"
+serde_json = "1.0"
 url = "2.5.7"
-pyo3 = { version = "0.25.0", features = ["abi3-py38"] }
+pyo3 = { version = "0.25.0", features = ["abi3-py39"] }
 pyo3-polars = "0.24.0"
 
 [lints.clippy]
@@ -101,3 +102,16 @@ unused_lifetimes = "deny"
 unused_macro_rules = "deny"
 unused_qualifications = "deny"
 unused_results = "deny"
+
+# Release profile optimized for performance
+# Used by maturin when building with --release flag
+[profile.release]
+opt-level = 3          # Maximum optimization for speed
+lto = "fat"            # Full link-time optimization
+codegen-units = 1      # Better optimization at cost of compile time
+panic = "abort"        # Smaller binary, no unwinding
+strip = true           # Remove debug symbols
+
+# Development profile for faster iteration
+[profile.dev]
+opt-level = 0          # No optimization for faster compilation
