@@ -28,17 +28,6 @@ jobs:
       - name: Set up Rust
         uses: dtolnay/rust-toolchain@stable
 
-      - name: Install OpenSSL via vcpkg (Windows)
-        if: runner.os == 'Windows'
-        run: |
-          vcpkg install openssl:x64-windows-static-md
-          $opensslRoot = "$env:VCPKG_INSTALLATION_ROOT\installed\x64-windows-static-md"
-          echo "VCPKG_ROOT=$env:VCPKG_INSTALLATION_ROOT" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
-          echo "OPENSSL_DIR=$opensslRoot" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
-          echo "OPENSSL_INCLUDE_DIR=$opensslRoot\include" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
-          echo "OPENSSL_LIB_DIR=$opensslRoot\lib" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
-          echo "OPENSSL_STATIC=1" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
-
       - name: Cache Rust dependencies
         uses: actions/cache@v5
         with:
@@ -55,14 +44,7 @@ jobs:
         run: python -m venv .venv
 
       - name: Activate virtual environment (Unix)
-        if: runner.os != 'Windows'
         run: echo "VIRTUAL_ENV=$(pwd)/.venv" >> $GITHUB_ENV && echo "$(pwd)/.venv/bin" >> $GITHUB_PATH
-
-      - name: Activate virtual environment (Windows)
-        if: runner.os == 'Windows'
-        run: |
-          echo "VIRTUAL_ENV=$(pwd)/.venv" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
-          echo "$(pwd)/.venv/Scripts" | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
 
       - name: Install dev dependencies
         run: pip install pytest pytest-cov pytest-benchmark
@@ -96,17 +78,6 @@ jobs:
 
       - name: Set up Rust
         uses: dtolnay/rust-toolchain@stable
-
-      - name: Install OpenSSL via vcpkg (Windows)
-        if: runner.os == 'Windows'
-        run: |
-          vcpkg install openssl:x64-windows-static-md
-          $opensslRoot = "$env:VCPKG_INSTALLATION_ROOT\installed\x64-windows-static-md"
-          echo "VCPKG_ROOT=$env:VCPKG_INSTALLATION_ROOT" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
-          echo "OPENSSL_DIR=$opensslRoot" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
-          echo "OPENSSL_INCLUDE_DIR=$opensslRoot\include" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
-          echo "OPENSSL_LIB_DIR=$opensslRoot\lib" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
-          echo "OPENSSL_STATIC=1" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
 
       - name: Cache Rust dependencies
         uses: actions/cache@v5
