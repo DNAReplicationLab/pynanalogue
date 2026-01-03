@@ -11,7 +11,7 @@ Please be respectful and constructive in all interactions with other contributor
 ### Prerequisites
 
 - Rust 1.70 or higher
-- Python 3.9 or higher
+- Python 3.10 or higher
 - maturin for building Python wheels
 
 ### Setting Up Your Development Environment
