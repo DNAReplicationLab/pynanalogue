@@ -14,7 +14,7 @@ jobs:
       fail-fast: false
       matrix:
         os: [ubuntu-latest, macos-latest]
-        python-version: ["3.10", "3.11", "3.12", "3.13"]
+        python-version: ["3.9", "3.10", "3.11", "3.12", "3.13", "3.14"]
 
     steps:
       - name: Checkout code
@@ -64,8 +64,8 @@ jobs:
           name: codecov-umbrella
           fail_ci_if_error: false
 
-  benchmark:
-    name: Benchmarks
+  benchmark_glibc:
+    name: Benchmarks (glibc)
     runs-on: ubuntu-latest
     steps:
       - name: Checkout code
@@ -104,17 +104,72 @@ jobs:
         run: maturin develop --release
 
       - name: Create benchmark storage directory
-        run: mkdir -p ${{ github.workspace }}/.benchmarks
+        run: mkdir -p ${{ github.workspace }}/benchmarks
 
       - name: Run benchmarks
-        run: pytest tests/ --benchmark-only --benchmark-autosave --benchmark-storage=${{ github.workspace }}/.benchmarks
+        run: pytest tests/ --benchmark-only --benchmark-autosave --benchmark-storage=${{ github.workspace }}/benchmarks
 
       - name: Store benchmark results
         if: github.event_name == 'push' && github.ref == 'refs/heads/main'
         uses: actions/upload-artifact@v6
         with:
-          name: benchmark-results
-          path: ${{ github.workspace }}/.benchmarks/
+          name: benchmark-results-glibc
+          path: ${{ github.workspace }}/benchmarks/*
+          include-hidden-files: true
+          if-no-files-found: warn
+
+  benchmark_musl:
+    name: Benchmarks (musl)
+    runs-on: ubuntu-latest
+    container:
+      image: quay.io/pypa/musllinux_1_2_x86_64
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v6
+
+      - name: Install Rust
+        run: |
+          curl https://sh.rustup.rs -sSf | sh -s -- -y
+          . "$HOME/.cargo/env"
+          echo "$HOME/.cargo/bin" >> $GITHUB_PATH
+
+      - name: Install system dependencies
+        run: |
+          apk add --no-cache \
+            bzip2-dev \
+            xz-dev \
+            zlib-dev \
+            zlib-static \
+            curl-dev \
+            openssl-dev \
+            build-base
+
+      - name: Set environment variables
+        run: echo "CFLAGS=-I/usr/include" >> $GITHUB_ENV
+
+      - name: Install maturin and Python dependencies
+        run: |
+          cd /opt/python/cp311-cp311/bin
+          ./python3 -m pip install maturin pytest pytest-benchmark
+
+      - name: Build package in release mode
+        run: |
+          . "$HOME/.cargo/env"
+          /opt/python/cp311-cp311/bin/maturin develop --release
+
+      - name: Create benchmark storage directory
+        run: mkdir -p ${{ github.workspace }}/benchmarks
+
+      - name: Run benchmarks
+        run: /opt/python/cp311-cp311/bin/pytest tests/ --benchmark-only --benchmark-autosave --benchmark-storage=${{ github.workspace }}/benchmarks
+
+      - name: Store benchmark results
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        uses: actions/upload-artifact@v6
+        with:
+          name: benchmark-results-musl
+          path: ${{ github.workspace }}/benchmarks/*
+          include-hidden-files: true
           if-no-files-found: warn
 
   lint:

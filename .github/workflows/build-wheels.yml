@@ -6,12 +6,12 @@ on:
   workflow_dispatch:  # Allow manual triggering
 
 jobs:
-  build_wheels:
+  build_macos_wheels:
     name: Build wheels on ${{ matrix.os }}
     runs-on: ${{ matrix.os }}
     strategy:
       matrix:
-        os: [ubuntu-22.04, macos-latest]
+        os: macos-latest
 
     steps:
       - name: Checkout code
@@ -26,12 +26,91 @@ jobs:
         uses: PyO3/maturin-action@v1
         with:
           command: build
-          args: --release --out dist --interpreter python3.10 --interpreter python3.11 --interpreter python3.12 --interpreter python3.13
+          args: --release --out dist --interpreter python3.9 --interpreter python3.10 --interpreter python3.11 --interpreter python3.12 --interpreter python3.13 --interpreter python3.14
 
       - name: Upload wheels
         uses: actions/upload-artifact@v6
         with:
           name: wheels-${{ matrix.os }}
+          path: dist/*.whl
+
+  build_linux_wheels:
+    name: Build wheels on ${{ matrix.container }}
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        container:
+          - quay.io/pypa/musllinux_1_2_x86_64
+          - quay.io/pypa/manylinux_2_28_x86_64
+          - quay.io/pypa/manylinux_2_34_x86_64
+          - quay.io/pypa/manylinux2014_x86_64
+    container:
+      image: ${{ matrix.container }}
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v6
+
+      - name: Install Rust
+        run: |
+          curl https://sh.rustup.rs -sSf | sh -s -- -y
+          . "$HOME/.cargo/env"
+          echo "$HOME/.cargo/bin" >> $GITHUB_PATH
+
+      - name: Install maturin and zig
+        run: |
+          cd /opt/python/cp310-cp310/bin
+          ./python3 -m pip install maturin[zig]
+          ZIGLANG_PATH=$(./python3 -c "import ziglang; import os; print(os.path.dirname(ziglang.__file__))")
+          ln -sf "$ZIGLANG_PATH/zig" /usr/local/bin/zig
+
+      - name: Install dependencies (musllinux)
+        if: contains(matrix.container, 'musllinux')
+        run: |
+          apk add --no-cache \
+            bzip2-dev \
+            xz-dev \
+            zlib-dev \
+            zlib-static \
+            curl-dev \
+            openssl-dev \
+            build-base
+
+      - name: Install dependencies (manylinux)
+        if: contains(matrix.container, 'manylinux')
+        run: |
+          yum install -y openssl-devel perl-IPC-Cmd perl-core perl-Time-Piece
+
+      - name: Set environment variables
+        if: contains(matrix.container, 'musllinux')
+        run: echo "CFLAGS=-I/usr/include" >> $GITHUB_ENV
+
+      - name: Determine compatibility tag
+        id: compat
+        run: |
+          if [[ "${{ matrix.container }}" == *"musllinux_1_2"* ]]; then
+            echo "tag=musllinux_1_2" >> $GITHUB_OUTPUT
+          elif [[ "${{ matrix.container }}" == *"manylinux_2_28"* ]]; then
+            echo "tag=manylinux_2_28" >> $GITHUB_OUTPUT
+          elif [[ "${{ matrix.container }}" == *"manylinux_2_34"* ]]; then
+            echo "tag=manylinux_2_34" >> $GITHUB_OUTPUT
+          elif [[ "${{ matrix.container }}" == *"manylinux2014"* ]]; then
+            echo "tag=manylinux2014" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Build wheels
+        run: |
+          . "$HOME/.cargo/env"
+          /opt/python/cp310-cp310/bin/maturin build --release \
+            --out dist \
+            --interpreter python3.9 --interpreter python3.10 --interpreter python3.11 --interpreter python3.12 --interpreter python3.13 --interpreter python3.14 \
+            --compatibility ${{ steps.compat.outputs.tag }} \
+            --zig
+
+      - name: Upload wheels
+        uses: actions/upload-artifact@v6
+        with:
+          name: wheels-${{ steps.compat.outputs.tag }}
           path: dist/*.whl
 
   build_sdist:
