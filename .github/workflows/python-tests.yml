@@ -1,4 +1,4 @@
-name: Python Tests
+name: Python Tests (3.9-3.14 Ubuntu & Mac), Benchmarks, Linting
 
 on:
   push:
@@ -120,6 +120,9 @@ jobs:
 
   benchmark_musl:
     name: Benchmarks (musl)
+    # A dependency `polars-runtime-32` has no musllinux wheel currently.
+    # So this job takes too long, so we've switched it off for the time being.
+    if: false
     runs-on: ubuntu-latest
     container:
       image: quay.io/pypa/musllinux_1_2_x86_64
@@ -155,7 +158,8 @@ jobs:
       - name: Build package in release mode
         run: |
           . "$HOME/.cargo/env"
-          /opt/python/cp311-cp311/bin/maturin develop --release
+          /opt/python/cp311-cp311/bin/maturin build --release
+          /opt/python/cp311-cp311/bin/python3 -m pip install ./target/wheels/pynanalogue-0.1.0-cp39-abi3-musllinux_1_2_x86_64.whl
 
       - name: Create benchmark storage directory
         run: mkdir -p ${{ github.workspace }}/benchmarks

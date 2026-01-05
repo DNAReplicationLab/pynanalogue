@@ -1,17 +1,100 @@
 # `pynanalogue`
 
-Nanalogue = *N*ucleic Acid *Analogue*
+PyNanalogue = *Py*thon *N*ucleic Acid *Analogue*
 Nanalogue is a tool to parse or analyse BAM/Mod BAM files with a single-molecule focus.
 We expose some of Nanalogue's functions through a python interface here.
 
-Software is in the alpha stage.
+[![Python Tests (3.9-3.14 Ubuntu & Mac), Benchmark, Linting](https://github.com/DNAReplicationLab/pynanalogue/actions/workflows/python-tests.yml/badge.svg)](https://github.com/DNAReplicationLab/pynanalogue/actions/workflows/python-tests.yml)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
-## Requirements
+A common pain point in genomics analyses is that BAM files are information-dense
+which makes it difficult to gain insight from them. PyNanalogue hopes to make it easy
+to extract and process this information, with a particular focus on single-molecule
+aspects and DNA/RNA modifications. Despite this focus, some of pynanalogue's functions are
+quite general and can be applied to almost any BAM file.
+
+# Requirements
 
 - Python 3.9 or higher
 - Rust toolchain (for building from source)
 
-## Versioning
+# Installation
+
+This section in development.
+
+PyNanalogue should be available on PyPI.
+You can run the following command or an equivalent to install it.
+
+```bash
+pip install nanalogue
+```
+
+Common wheels (`manylinux/mac`) are available there.
+Please open an issue if you want more wheels!
+
+## Musllinux note
+
+Although we have a `musllinux` wheel, a package we depend on, `polars-runtime-32`, does not
+have one (see this [issue](https://github.com/pola-rs/polars/issues/25568)), which means
+you may have to build the wheel yourself during installation. Please open an issue if you
+spot that this has changed! This issue affects only those that use an Alpine Linux distribution
+or similar. If you are using Ubuntu/Debian etc., this issue should not affect you.
+
+# Functions
+
+Our package exposes the following python functions.
+They usually have lots of optional arguments.
+Among other operations, the options allow you to subsample the BAM file (`sample_fraction`),
+restrict read and/or modification data to a specific genomic region (`region` or `mod_region`),
+restrict by one or several read ids (`read_ids`),
+a specific mapping type (`read_filter`), filter modification data suitably
+(`min_mod_qual`, `reject_mod_qual_non_inclusive`) etc.
+
+## Read info
+
+Prints information about reads in JSON. A sample output snippet follows.
+
+```python
+import pynanalogue as pn
+import json
+result_bytes = pn.read_info("some_file.bam")
+decoded_output = json.loads(result_bytes)
+```
+
+A record from the decoded output might look like
+```json
+[
+{
+   "read_id": "cd623d4a-510d-4c6c-9d88-10eb475ac59d",
+   "sequence_length": 2104,
+   "contig": "contig_0",
+   "reference_start": 7369,
+   "reference_end": 9473,
+   "alignment_length": 2104,
+   "alignment_type": "primary_reverse",
+   "mod_count": "C-m:263;N+N:2104;(probabilities >= 0.5020, PHRED base qual >= 0)"
+}
+]
+```
+
+## Window reads
+
+Documentation in development.
+
+## Polars bam mods
+
+Documentation in development.
+
+## Simulate mod bam
+
+Documentation in development.
+
+# Further documentation
+
+In addition to this repository, we are developing a
+companion cookbook [here](https://www.nanalogue.com).
+
+# Versioning
 
 We use [Semantic Versioning](https://semver.org/) (SemVer) for version numbers.
 
