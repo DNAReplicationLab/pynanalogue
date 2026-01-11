@@ -21,6 +21,9 @@ in a BAM file in the mod BAM format (i.e. using MM/ML tags as laid down in the
 
 ## Table of Contents
 
+Note: these links work in Github but may not work on PyPI.
+But the table of contents is correct.
+
 - [Requirements](#requirements)
 - [Installation](#installation)
   - [More details](#more-details)
@@ -52,7 +55,7 @@ PyNanalogue should be available on PyPI.
 You can run the following command or an equivalent to install it.
 
 ```bash
-pip install nanalogue
+pip install pynanalogue
 ```
 
 ## More details
@@ -306,6 +309,10 @@ fasta_path="output.fasta"
 
 In addition to this repository, we are developing a
 companion cookbook [here](https://www.nanalogue.com).
+
+# Changelog
+
+For a detailed list of changes in each version, please see CHANGELOG.md in the repository.
 
 # Versioning
 

@@ -1,6 +1,6 @@
 [package]
 name = "pynanalogue"
-version = "0.1.0"
+version = "0.1.4"
 edition = "2024"
 
 [lib]
@@ -8,7 +8,7 @@ name = "pynanalogue"
 crate-type = ["cdylib", "lib"]
 
 [dependencies]
-nanalogue = "0.1.2"
+nanalogue = "0.1.4"
 polars = "0.51"
 rust-htslib = "0.46.0"
 serde_json = "1.0"

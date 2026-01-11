@@ -1,0 +1,10 @@
+name: Publish to PyPI
+
+on:
+  workflow_dispatch:  # Allow manual triggering
+
+jobs:
+  publish_to_pypi:
+    name: Publish to PyPI
+    runs-on: ubuntu-latest
+    if: false
