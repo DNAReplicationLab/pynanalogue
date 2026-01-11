@@ -88,6 +88,7 @@ jobs:
           fi
 
           echo "tag=${BASE_TAG}_${ARCH}" >> $GITHUB_OUTPUT
+          echo "base_tag=${BASE_TAG}" >> $GITHUB_OUTPUT
 
       - name: Build wheels in container
         run: |
@@ -134,7 +135,7 @@ jobs:
               /opt/python/cp311-cp311/bin/maturin build --release \
                 --out dist \
                 --interpreter python3.9 --interpreter python3.10 --interpreter python3.11 --interpreter python3.12 --interpreter python3.13 --interpreter python3.14 \
-                --compatibility ${{ steps.compat.outputs.tag }} \
+                --compatibility ${{ steps.compat.outputs.base_tag }} \
                 --zig
             '
 
