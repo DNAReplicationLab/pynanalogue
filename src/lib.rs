@@ -21,11 +21,12 @@ use nanalogue_core::{
     BamPreFilt as _, BamRcRecords, CurrRead, Error, F32Bw0and1, InputBam, InputBamBuilder,
     InputMods, InputModsBuilder, InputWindowingBuilder, OptionalTag, OrdPair, PathOrURLOrStdin,
     SimulationConfig, ThresholdState, analysis, curr_reads_to_dataframe,
-    nanalogue_indexed_bam_reader, nanalogue_indexed_bam_reader_from_url,
+    nanalogue_indexed_bam_reader, nanalogue_indexed_bam_reader_from_url, peek as rust_peek,
     read_info as rust_read_info, simulate_mod_bam as rust_simulate_mod_bam,
     window_reads as rust_window_reads,
 };
 use pyo3::prelude::*;
+use pyo3::types::{PyDict, PyList};
 use pyo3_polars::PyDataFrame;
 use rust_htslib::bam::FetchDefinition;
 use std::collections::HashSet;
@@ -853,12 +854,131 @@ fn simulate_mod_bam(json_config: &str, bam_path: &str, fasta_path: &str) -> PyRe
     Ok(())
 }
 
+/// Peeks at a BAM file to extract contig information and detected modifications.
+///
+/// This function reads the BAM header and examines up to 100 records to determine
+/// the contigs present in the file and any DNA/RNA modifications detected.
+///
+/// # Args
+/// bam_path (str): Path to the BAM file.
+/// treat_as_url (optional, bool): If True, treat `bam_path` as a URL, default False.
+///
+/// # Returns
+///
+/// A dictionary with two keys:
+/// - `contigs`: A dictionary mapping contig names to their lengths
+/// - `modifications`: A list of modifications, where each modification is a list
+///   of three strings: \[base, strand, `mod_code`\]. For example: \[\["T", "+", "T"\], \["G", "-", "7200"\]\]
+///
+/// # Example
+///
+/// ```python
+/// import pynanalogue
+///
+/// result = pynanalogue.peek("example.bam")
+/// print(result["contigs"])  # {"chr1": 248956422, "chr2": 242193529, ...}
+/// print(result["modifications"])  # [["C", "+", "m"], ["A", "+", "28871"]]
+/// ```
+///
+/// # Errors
+/// If the BAM file cannot be read or parsed
+#[expect(
+    clippy::doc_markdown,
+    reason = "Python bindings use Python-style documentation conventions"
+)]
+#[pyfunction]
+#[pyo3(signature = (bam_path, treat_as_url = false))]
+fn peek(py: Python<'_>, bam_path: &str, treat_as_url: bool) -> PyResult<Py<PyDict>> {
+    // Build minimal InputBam with just path/url
+    let mut input_bam = InputBamBuilder::default()
+        .bam_path({
+            if treat_as_url {
+                PathOrURLOrStdin::URL(
+                    Url::parse(bam_path).map_err(|e: ParseError| py_value_error!(e))?,
+                )
+            } else {
+                PathOrURLOrStdin::Path(bam_path.into())
+            }
+        })
+        .build()
+        .map_err(|e| py_value_error!(e))?;
+
+    // Load BAM and create BamRcRecords to get header and records
+    let mut reader = load_bam(input_bam.clone())?;
+    let bam_rc_records = BamRcRecords::new(
+        &mut reader,
+        &mut input_bam,
+        &mut InputMods::<OptionalTag>::default(),
+    )
+    .map_err(|e| py_exception!(e))?;
+
+    // Run peek and capture output
+    let mut buffer = Vec::new();
+    rust_peek::run(
+        &mut buffer,
+        &bam_rc_records.header,
+        bam_rc_records.rc_records.take(100),
+    )
+    .map_err(|e| py_exception!(e))?;
+
+    // Parse the output string directly into Python dict/list
+    let output_str = String::from_utf8(buffer).map_err(|e| py_value_error!(e))?;
+    let result = PyDict::new(py);
+    let contigs_dict = PyDict::new(py);
+    let mods_list = PyList::empty(py);
+    let mut in_contigs_section = true;
+
+    for line in output_str.lines() {
+        let trimmed = line.trim();
+        match trimmed {
+            "" | "None" => {}
+            "contigs_and_lengths:" => in_contigs_section = true,
+            "modifications:" => in_contigs_section = false,
+            _ if in_contigs_section => {
+                // Parse "contig_name\tlength"
+                let parts: Vec<&str> = trimmed.split('\t').collect();
+                let contig_name = parts
+                    .first()
+                    .ok_or_else(|| py_value_error!("Missing contig name"))?;
+                let length: u64 = parts
+                    .get(1)
+                    .ok_or_else(|| py_value_error!("Missing contig length"))?
+                    .parse()
+                    .map_err(|e| py_value_error!(format!("Failed to parse contig length: {e}")))?;
+                contigs_dict.set_item(*contig_name, length)?;
+            }
+            _ => {
+                // Parse modification string like "G-7200" or "T+T"
+                // Format: base + strand + mod_code (strand is always '+' or '-' at position 1)
+                let base = trimmed
+                    .chars()
+                    .next()
+                    .ok_or_else(|| py_value_error!("Empty modification string"))?
+                    .to_string();
+                let strand = trimmed
+                    .chars()
+                    .nth(1)
+                    .ok_or_else(|| py_value_error!("Modification string missing strand"))?
+                    .to_string();
+                let mod_code: String = trimmed.chars().skip(2).collect();
+                mods_list.append(PyList::new(py, [base, strand, mod_code])?)?;
+            }
+        }
+    }
+
+    result.set_item("contigs", contigs_dict)?;
+    result.set_item("modifications", mods_list)?;
+
+    Ok(result.into())
+}
+
 /// Our python module; calls our rust functions
 ///
 /// # Errors
 /// `PyO3` errors
 #[pymodule]
 fn pynanalogue(m: &Bound<'_, PyModule>) -> PyResult<()> {
+    m.add_function(wrap_pyfunction!(peek, m)?)?;
     m.add_function(wrap_pyfunction!(read_info, m)?)?;
     m.add_function(wrap_pyfunction!(window_reads, m)?)?;
     m.add_function(wrap_pyfunction!(polars_bam_mods, m)?)?;

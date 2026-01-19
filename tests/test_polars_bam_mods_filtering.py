@@ -60,7 +60,30 @@ class TestInputBamFiltering:
         assert len(result_all) > 0, "Expected some reads in unfiltered data"
         assert len(result_filtered) == 0, "Expected no reads with min_seq_len=6000"
 
-    def test_mapq_filter(self, simple_bam):
+    def test_min_align_len_filter(self, simple_bam):
+        """Test that min_align_len correctly filters reads"""
+        base = TestInputOptions(bam_path=str(simple_bam))
+
+        # Get all reads
+        result_all = pynanalogue.polars_bam_mods(**base.as_dict())
+
+        # Filter with min_align_len=1 first and then with min_align_len=6000 (our test reads are 5000bp)
+        params_filtered_1 = replace(base, min_align_len=1)
+        result_filtered_1 = pynanalogue.polars_bam_mods(**params_filtered_1.as_dict())
+        params_filtered_2 = replace(base, min_align_len=6000)
+        result_filtered_2 = pynanalogue.polars_bam_mods(**params_filtered_2.as_dict())
+
+        # Should filter out some reads as some are unmapped
+        assert len(result_all) > 0, "Expected some reads in unfiltered data"
+        assert len(result_filtered_1) < len(result_all), (
+            "Unmapped reads must have filtered out"
+        )
+
+        # Should filter out all reads since they're all 5kb
+        assert len(result_all) > 0, "Expected some reads in unfiltered data"
+        assert len(result_filtered_2) == 0, "Expected no reads with min_align_len=6000"
+
+    def test_mapq_filter_and_exclude_mapq_unavail(self, simple_bam):
         """Test that mapq_filter correctly filters reads"""
         base = TestInputOptions(bam_path=str(simple_bam))
 
@@ -113,13 +136,12 @@ class TestInputBamFiltering:
                 f"Expected ~{expected} reads, got {sampled_count}"
             )
 
-    def test_region_filter(self, simple_bam):
+    def test_different_region_filters(self, simple_bam):
         """Test that region filtering works"""
         base = TestInputOptions(bam_path=str(simple_bam))
 
         # Test with a specific region (simulated BAM contigs are named contig_00000, contig_00001, etc.)
         params_region = replace(base, region="contig_00000")
-
         result = pynanalogue.polars_bam_mods(**params_region.as_dict())
 
         # Verify all results are from contig_00000
@@ -128,6 +150,16 @@ class TestInputBamFiltering:
             assert unique_contigs == ["contig_00000"], (
                 f"Expected only contig_00000, got {unique_contigs}"
             )
+        else:
+            raise AssertionError("Expected some reads that map to contig_00000")
+
+        # Test with the same region that if we request full region, then we don't get any reads
+        # as no reads pass through the entire region.
+        params_region_2 = replace(base, region="contig_00000", full_region=True)
+        result_2 = pynanalogue.polars_bam_mods(**params_region_2.as_dict())
+        assert len(result_2) == 0, (
+            "No reads are expected to pass through the whole region"
+        )
 
     def test_read_filter_primary_only(self, simple_bam):
         """Test that read_filter correctly filters by alignment type"""
@@ -143,6 +175,8 @@ class TestInputBamFiltering:
             assert all("primary" in atype for atype in alignment_types), (
                 f"Expected only primary alignments, got {alignment_types}"
             )
+        else:
+            raise AssertionError("expected some primary reads!")
 
         # Test that whitespace-separated filter strings are trimmed and produce same results
         params_primary_2 = replace(base, read_filter="primary_forward, primary_reverse")
@@ -151,6 +185,54 @@ class TestInputBamFiltering:
         assert len(result_primary) == len(result_primary_2), (
             "Whitespace in comma-separated filter should be trimmed and produce same results"
         )
+
+    def test_read_ids_filter_single(self, simple_bam):
+        """Test filtering by a single read_id"""
+        base = TestInputOptions(bam_path=str(simple_bam))
+
+        # Load all data
+        result_all = pynanalogue.polars_bam_mods(**base.as_dict())
+
+        # Pick a random read id
+        all_read_ids = result_all["read_id"].unique().to_list()
+        selected_read_id = all_read_ids[0]
+
+        # Count expected rows for this read id
+        expected_count = len(result_all.filter(pl.col("read_id") == selected_read_id))
+
+        # Filter by this single read id
+        params_filtered = replace(base, read_ids={selected_read_id})
+        result_filtered = pynanalogue.polars_bam_mods(**params_filtered.as_dict())
+
+        assert len(result_filtered) == expected_count, (
+            f"Expected {expected_count} rows for read_id {selected_read_id}, got {len(result_filtered)}"
+        )
+        assert result_filtered["read_id"].unique().to_list() == [selected_read_id]
+
+    def test_read_ids_filter_two(self, simple_bam):
+        """Test filtering by two read_ids"""
+        base = TestInputOptions(bam_path=str(simple_bam))
+
+        # Load all data
+        result_all = pynanalogue.polars_bam_mods(**base.as_dict())
+
+        # Pick two read ids
+        all_read_ids = result_all["read_id"].unique().to_list()
+        selected_read_ids = set(all_read_ids[:2])
+
+        # Count expected rows for these read ids
+        expected_count = len(
+            result_all.filter(pl.col("read_id").is_in(selected_read_ids))
+        )
+
+        # Filter by these two read ids
+        params_filtered = replace(base, read_ids=selected_read_ids)
+        result_filtered = pynanalogue.polars_bam_mods(**params_filtered.as_dict())
+
+        assert len(result_filtered) == expected_count, (
+            f"Expected {expected_count} rows for read_ids {selected_read_ids}, got {len(result_filtered)}"
+        )
+        assert set(result_filtered["read_id"].unique().to_list()) == selected_read_ids
 
 
 class TestInputModsFiltering:
@@ -180,8 +262,8 @@ class TestInputModsFiltering:
         params_high_qual = replace(base, min_mod_qual=200)
         result_high_qual = pynanalogue.polars_bam_mods(**params_high_qual.as_dict())
 
-        # Should have fewer (or same) mods with higher quality threshold
-        assert len(result_high_qual) <= len(result_all)
+        # Should have fewer mods with higher quality threshold
+        assert len(result_high_qual) < len(result_all)
 
     @pytest.mark.parametrize(
         "low,high,should_succeed",
@@ -233,3 +315,31 @@ class TestInputModsFiltering:
 
         # Should have fewer mods with quality filtering
         assert len(result_qual_filtered) < len(result_all)
+
+    def test_mod_region_filter(self, simple_bam):
+        """Test that mod_region filtering restricts results to specified regions"""
+        base = TestInputOptions(bam_path=str(simple_bam))
+
+        # Get all mods (no region filter)
+        result_all = pynanalogue.polars_bam_mods(**base.as_dict())
+        count_all = len(result_all)
+
+        # Filter to just contig_00000
+        params_contig = replace(base, mod_region="contig_00000")
+        result_contig = pynanalogue.polars_bam_mods(**params_contig.as_dict())
+        count_contig = len(result_contig)
+
+        # Filter to specific range within contig_00000
+        params_range = replace(base, mod_region="contig_00000:1000-2000")
+        result_range = pynanalogue.polars_bam_mods(**params_range.as_dict())
+        count_range = len(result_range)
+
+        # Filtering by contig should give fewer results than no filter
+        assert count_contig < count_all, (
+            f"Expected fewer mods with contig filter, got {count_contig} vs {count_all}"
+        )
+
+        # Filtering by specific range should give even fewer results
+        assert count_range < count_contig, (
+            f"Expected fewer mods with range filter, got {count_range} vs {count_contig}"
+        )
