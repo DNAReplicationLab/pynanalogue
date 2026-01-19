@@ -30,6 +30,7 @@ class TestInputOptions:
     exclude_mapq_unavail: bool = False
     region: str = ""
     full_region: bool = False
+    tag: str = ""
     mod_strand: str = ""
     min_mod_qual: int = 0
     reject_mod_qual_non_inclusive: tuple = (0, 0)
@@ -342,4 +343,45 @@ class TestInputModsFiltering:
         # Filtering by specific range should give even fewer results
         assert count_range < count_contig, (
             f"Expected fewer mods with range filter, got {count_range} vs {count_contig}"
+        )
+
+    def test_tag_filter(self, two_mods_bam):
+        """Test that tag parameter filters to specific modification types.
+
+        The two_mods_bam fixture has:
+        - T modifications on minus strand (mod_code="T")
+        - C modifications on plus strand (mod_code="76792")
+        """
+        base = TestInputOptions(bam_path=str(two_mods_bam))
+
+        # Get all mods (no tag filter)
+        result_all = pynanalogue.polars_bam_mods(**base.as_dict())
+        mod_codes_all = set(result_all["mod_code"].unique().to_list())
+
+        # Verify both mod types are present
+        assert "T" in mod_codes_all, "Expected T mod in unfiltered data"
+        assert "76792" in mod_codes_all, "Expected 76792 mod in unfiltered data"
+
+        # Filter to only 76792 mods
+        params_76792 = replace(base, tag="76792")
+        result_76792 = pynanalogue.polars_bam_mods(**params_76792.as_dict())
+        mod_codes_76792 = set(result_76792["mod_code"].unique().to_list())
+
+        assert len(result_76792) > 0, "Expected some 76792 mods"
+        assert mod_codes_76792 == {"76792"}, (
+            f"Expected only 76792 mod, got {mod_codes_76792}"
+        )
+
+        # Filter to only T mods
+        params_t = replace(base, tag="T")
+        result_t = pynanalogue.polars_bam_mods(**params_t.as_dict())
+        mod_codes_t = set(result_t["mod_code"].unique().to_list())
+
+        assert len(result_t) > 0, "Expected some T mods"
+        assert mod_codes_t == {"T"}, f"Expected only T mod, got {mod_codes_t}"
+
+        # Verify counts add up
+        assert len(result_76792) + len(result_t) == len(result_all), (
+            f"Sum of filtered results ({len(result_76792)} + {len(result_t)}) "
+            f"should equal unfiltered ({len(result_all)})"
         )

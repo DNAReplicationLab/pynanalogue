@@ -63,6 +63,7 @@ class InputOptions:
     exclude_mapq_unavail: bool = False
     region: str = ""
     full_region: bool = False
+    tag: str = ""
     mod_strand: str = ""
     min_mod_qual: int = 0
     reject_mod_qual_non_inclusive: tuple = (0, 0)
@@ -439,4 +440,108 @@ class TestInputModsFiltering:
         assert total_mods_range < total_mods_contig, (
             f"Expected fewer mods with range filter, "
             f"got {total_mods_range} vs {total_mods_contig}"
+        )
+
+
+def has_mod_in_mod_count(mod_count_str: str, mod_pattern: str) -> bool:
+    """Check if a specific mod pattern exists in mod_count string with count > 0.
+
+    Args:
+        mod_count_str: The mod_count string like "T-T:123;C+76792:456;(...)"
+        mod_pattern: Pattern to look for, e.g. "T-T" or "C+76792"
+
+    Returns:
+        True if the mod exists with count > 0
+    """
+    if mod_count_str == "NA":
+        return False
+    # Look for pattern followed by :number where number > 0
+    match = re.search(rf"{re.escape(mod_pattern)}:(\d+)", mod_count_str)
+    if match:
+        return int(match.group(1)) > 0
+    return False
+
+
+def get_mod_count_for_type(mod_count_str: str, mod_pattern: str) -> int:
+    """Extract the count for a specific mod type from mod_count string.
+
+    Args:
+        mod_count_str: The mod_count string like "T-T:123;C+76792:456;(...)"
+        mod_pattern: Pattern to look for, e.g. "T-T" or "C+76792"
+
+    Returns:
+        The count for that mod type, or 0 if not found
+    """
+    if mod_count_str == "NA":
+        return 0
+    match = re.search(rf"{re.escape(mod_pattern)}:(\d+)", mod_count_str)
+    if match:
+        return int(match.group(1))
+    return 0
+
+
+class TestTagFiltering:
+    """Test tag parameter filtering for read_info"""
+
+    def test_tag_filter(self, two_mods_bam):
+        """Test that tag parameter filters to specific modification types.
+
+        The two_mods_bam fixture has:
+        - T modifications on minus strand (T-T in mod_count)
+        - C modifications on plus strand (C+76792 in mod_count)
+        """
+        base = InputOptions(bam_path=str(two_mods_bam))
+
+        # Get all mods (no tag filter)
+        result_all = decode_read_info(pynanalogue.read_info(**base.as_dict()))
+
+        # Check that both mod types are present in unfiltered data
+        has_t_mod = any(
+            has_mod_in_mod_count(r.get("mod_count", "NA"), "T-T") for r in result_all
+        )
+        has_76792_mod = any(
+            has_mod_in_mod_count(r.get("mod_count", "NA"), "C+76792")
+            for r in result_all
+        )
+
+        assert has_t_mod, "Expected T-T mod in unfiltered data"
+        assert has_76792_mod, "Expected C+76792 mod in unfiltered data"
+
+        # Filter to only 76792 mods
+        params_76792 = replace(base, tag="76792")
+        result_76792 = decode_read_info(pynanalogue.read_info(**params_76792.as_dict()))
+
+        # Verify only 76792 mods are present (T-T should have 0 count or not appear)
+        total_76792_mods = sum(
+            get_mod_count_for_type(r.get("mod_count", "NA"), "C+76792")
+            for r in result_76792
+        )
+        total_t_mods_in_76792 = sum(
+            get_mod_count_for_type(r.get("mod_count", "NA"), "T-T")
+            for r in result_76792
+        )
+
+        assert total_76792_mods > 0, (
+            "Expected some C+76792 mods when filtering by 76792"
+        )
+        assert total_t_mods_in_76792 == 0, (
+            f"Expected no T-T mods when filtering by 76792, got {total_t_mods_in_76792}"
+        )
+
+        # Filter to only T mods
+        params_t = replace(base, tag="T")
+        result_t = decode_read_info(pynanalogue.read_info(**params_t.as_dict()))
+
+        # Verify only T mods are present (76792 should have 0 count or not appear)
+        total_t_mods = sum(
+            get_mod_count_for_type(r.get("mod_count", "NA"), "T-T") for r in result_t
+        )
+        total_76792_mods_in_t = sum(
+            get_mod_count_for_type(r.get("mod_count", "NA"), "C+76792")
+            for r in result_t
+        )
+
+        assert total_t_mods > 0, "Expected some T-T mods when filtering by T"
+        assert total_76792_mods_in_t == 0, (
+            f"Expected no C+76792 mods when filtering by T, got {total_76792_mods_in_t}"
         )

@@ -57,3 +57,9 @@ def simple_bam(tmp_path):
 def benchmark_bam(tmp_path):
     """Generate a larger benchmark BAM for performance testing"""
     return _generate_bam_from_config(tmp_path, "benchmark_bam", "benchmark")
+
+
+@pytest.fixture
+def two_mods_bam(tmp_path):
+    """Generate a test BAM with two different modifications (T on minus, C on plus)"""
+    return _generate_bam_from_config(tmp_path, "two_mods_bam", "two_mods")

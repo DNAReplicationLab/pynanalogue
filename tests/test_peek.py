@@ -25,46 +25,9 @@ class TestPeek:
         expected_modifications = [["T", "+", "T"]]
         assert result["modifications"] == expected_modifications
 
-    def test_peek_two_mods(self, tmp_path):
+    def test_peek_two_mods(self, two_mods_bam):
         """Test peek with BAM containing two different modifications"""
-        config = {
-            "contigs": {"number": 2, "len_range": [10000, 10000]},
-            "reads": [
-                {
-                    "number": 100,
-                    "mapq_range": [20, 30],
-                    "base_qual_range": [20, 30],
-                    "len_range": [0.5, 0.5],
-                    "insert_middle": "ATCG",
-                    "mods": [
-                        {
-                            "base": "T",
-                            "is_strand_plus": False,
-                            "mod_code": "T",
-                            "win": [40, 40],
-                            "mod_range": [[0.1, 0.2], [0.7, 0.8]],
-                        },
-                        {
-                            "base": "C",
-                            "is_strand_plus": True,
-                            "mod_code": "76792",
-                            "win": [40, 40],
-                            "mod_range": [[0.1, 0.2], [0.7, 0.8]],
-                        },
-                    ],
-                }
-            ],
-        }
-
-        bam_path = tmp_path / "two_mods.bam"
-        fasta_path = tmp_path / "two_mods.fasta"
-        pynanalogue.simulate_mod_bam(
-            json_config=json.dumps(config),
-            bam_path=str(bam_path),
-            fasta_path=str(fasta_path),
-        )
-
-        result = pynanalogue.peek(str(bam_path))
+        result = pynanalogue.peek(str(two_mods_bam))
 
         # Verify result structure
         assert "contigs" in result

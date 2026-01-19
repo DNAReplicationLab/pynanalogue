@@ -9,7 +9,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 - New `peek()` function to extract BAM file metadata (contigs and modifications) without full processing
+- New `tag` parameter for `polars_bam_mods`, `read_info`, and `window_reads` functions to filter by specific modification type (e.g., single-letter code "m" or ChEBI code "76792")
 - Comprehensive filtering parameter tests for `polars_bam_mods`, `read_info`, and `window_reads` functions
+- New `two_mods_bam` test fixture for testing multiple modification types
 
 ### Changed
 - Updated nanalogue dependency from 0.1.4 to 0.1.6

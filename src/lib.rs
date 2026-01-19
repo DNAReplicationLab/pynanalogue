@@ -31,6 +31,7 @@ use pyo3_polars::PyDataFrame;
 use rust_htslib::bam::FetchDefinition;
 use std::collections::HashSet;
 use std::num::NonZeroU32;
+use std::str::FromStr as _;
 use url::{ParseError, Url};
 
 /// Converts a `nanalogue_core::Error` to a `PyException` through `Display`
@@ -87,6 +88,7 @@ fn parse_input_options(
     exclude_mapq_unavail: bool,
     region: &str,
     full_region: bool,
+    tag: &str,
     mod_strand: &str,
     min_mod_qual: u8,
     reject_mod_qual_non_inclusive: (u8, u8),
@@ -149,11 +151,8 @@ fn parse_input_options(
 
     let bam = bam_builder.build().map_err(|e| py_value_error!(e))?;
 
-    #[expect(
-        clippy::arithmetic_side_effects,
-        reason = "we check low < high - 1 so no chance of over or underflow"
-    )]
-    let mods = InputModsBuilder::<OptionalTag>::default()
+    let mut mods_builder = InputModsBuilder::<OptionalTag>::default();
+    let _ = mods_builder
         .mod_strand(mod_strand.into())
         .mod_prob_filter({
             let low = reject_mod_qual_non_inclusive.0;
@@ -165,17 +164,24 @@ fn parse_input_options(
                     ));
                 }
                 Some(0 | 1) => ThresholdState::GtEq(min_mod_qual),
-                _ => ThresholdState::Both((
-                    min_mod_qual,
-                    OrdPair::<u8>::try_from((low + 1, high - 1)).map_err(|e| py_value_error!(e))?,
-                )),
+                _ => {
+                    #[expect(
+                        clippy::arithmetic_side_effects,
+                        reason = "we check low < high - 1 so no chance of over or underflow"
+                    )]
+                    let ord_pair = OrdPair::<u8>::try_from((low + 1, high - 1))
+                        .map_err(|e| py_value_error!(e))?;
+                    ThresholdState::Both((min_mod_qual, ord_pair))
+                }
             }
         })
         .trim_read_ends_mod(trim_read_ends_mod)
         .base_qual_filter_mod(base_qual_filter_mod)
-        .mod_region(mod_region.into())
-        .build()
-        .map_err(|e| py_value_error!(e))?;
+        .mod_region(mod_region.into());
+    if !tag.is_empty() {
+        let _ = mods_builder.tag(OptionalTag::from_str(tag).map_err(|e| py_value_error!(e))?);
+    }
+    let mods = mods_builder.build().map_err(|e| py_value_error!(e))?;
 
     Ok((bam, mods))
 }
@@ -250,6 +256,9 @@ fn load_bam(bam: InputBam) -> PyResult<rust_htslib::bam::IndexedReader> {
 ///     with `mod_region`.
 /// full_region (optional, bool): Only include reads if they pass through the region above
 ///     in full. Defaults to false.
+/// tag (optional, str): If set, only this type of modification is processed. Input is a
+///     string type, for example a single-letter code "m", a number as a string "76792" etc.
+///     Defaults to processing all modifications.
 /// mod_strand (optional, str): Set this to `bc` or `bc_comp` to retrieve information
 ///     about mods only from the basecalled strand or only from its complement.
 ///     Some sequencing technologies like `PacBio` or `ONT duplex` record mod information
@@ -322,7 +331,7 @@ fn load_bam(bam: InputBam) -> PyResult<rust_htslib::bam::IndexedReader> {
                     read_ids = HashSet::<String>::new(), threads = 2, include_zero_len = false,
                     read_filter = "", sample_fraction = 1.0, mapq_filter = 0,
                     exclude_mapq_unavail = false, region = "", full_region = false,
-                    mod_strand = "", min_mod_qual = 0,
+                    tag = "", mod_strand = "", min_mod_qual = 0,
                     reject_mod_qual_non_inclusive = (0, 0), trim_read_ends_mod = 0,
                     base_qual_filter_mod = 0, mod_region = ""))]
 fn read_info(
@@ -339,6 +348,7 @@ fn read_info(
     exclude_mapq_unavail: bool,
     region: &str,
     full_region: bool,
+    tag: &str,
     mod_strand: &str,
     min_mod_qual: u8,
     reject_mod_qual_non_inclusive: (u8, u8),
@@ -361,6 +371,7 @@ fn read_info(
         exclude_mapq_unavail,
         region,
         full_region,
+        tag,
         mod_strand,
         min_mod_qual,
         reject_mod_qual_non_inclusive,
@@ -433,6 +444,9 @@ fn read_info(
 ///     with `mod_region`.
 /// full_region (optional, bool): Only include reads if they pass through the region above
 ///     in full. Defaults to false.
+/// tag (optional, str): If set, only this type of modification is processed. Input is a
+///     string type, for example a single-letter code "m", a number as a string "76792" etc.
+///     Defaults to processing all modifications.
 /// mod_strand (optional, str): Set this to `bc` or `bc_comp` to retrieve information
 ///     about mods only from the basecalled strand or only from its complement.
 ///     Some sequencing technologies like `PacBio` or `ONT duplex` record mod information
@@ -490,7 +504,7 @@ fn read_info(
                     read_ids = HashSet::<String>::new(), threads = 2, include_zero_len = false,
                     read_filter = "", sample_fraction = 1.0, mapq_filter = 0,
                     exclude_mapq_unavail = false, region = "", full_region = false,
-                    mod_strand = "", min_mod_qual = 0,
+                    tag = "", mod_strand = "", min_mod_qual = 0,
                     reject_mod_qual_non_inclusive = (0, 0), trim_read_ends_mod = 0,
                     base_qual_filter_mod = 0, mod_region = ""))]
 fn window_reads(
@@ -509,6 +523,7 @@ fn window_reads(
     exclude_mapq_unavail: bool,
     region: &str,
     full_region: bool,
+    tag: &str,
     mod_strand: &str,
     min_mod_qual: u8,
     reject_mod_qual_non_inclusive: (u8, u8),
@@ -531,6 +546,7 @@ fn window_reads(
         exclude_mapq_unavail,
         region,
         full_region,
+        tag,
         mod_strand,
         min_mod_qual,
         reject_mod_qual_non_inclusive,
@@ -604,6 +620,9 @@ fn window_reads(
 ///     with `mod_region`.
 /// full_region (optional, bool): Only include reads if they pass through the region above
 ///     in full. Defaults to false.
+/// tag (optional, str): If set, only this type of modification is processed. Input is a
+///     string type, for example a single-letter code "m", a number as a string "76792" etc.
+///     Defaults to processing all modifications.
 /// mod_strand (optional, str): Set this to `bc` or `bc_comp` to retrieve information
 ///     about mods only from the basecalled strand or only from its complement.
 ///     Some sequencing technologies like `PacBio` or `ONT duplex` record mod information
@@ -681,7 +700,7 @@ fn window_reads(
                     read_ids = HashSet::<String>::new(), threads = 2, include_zero_len = false,
                     read_filter = "", sample_fraction = 1.0, mapq_filter = 0,
                     exclude_mapq_unavail = false, region = "", full_region = false,
-                    mod_strand = "", min_mod_qual = 0,
+                    tag = "", mod_strand = "", min_mod_qual = 0,
                     reject_mod_qual_non_inclusive = (0, 0), trim_read_ends_mod = 0,
                     base_qual_filter_mod = 0, mod_region = ""))]
 fn polars_bam_mods(
@@ -698,6 +717,7 @@ fn polars_bam_mods(
     exclude_mapq_unavail: bool,
     region: &str,
     full_region: bool,
+    tag: &str,
     mod_strand: &str,
     min_mod_qual: u8,
     reject_mod_qual_non_inclusive: (u8, u8),
@@ -720,6 +740,7 @@ fn polars_bam_mods(
         exclude_mapq_unavail,
         region,
         full_region,
+        tag,
         mod_strand,
         min_mod_qual,
         reject_mod_qual_non_inclusive,
