@@ -134,7 +134,12 @@ class TestInputBamFiltering:
         [
             (1.0, 1.0),  # No sampling
             (0.5, 0.5),  # Half sampling (approximate)
-            (0.1, 0.1),  # 10% sampling (approximate)
+            # (0.1, 0.1), 10% sampling (approximate)
+            # We are removing this test case due to fluctuations.
+            # We are now querying all reads that pass fully through
+            # a small region, so the number of reads we are dealing with
+            # is small and a coin toss with 10% probability of success
+            # fluctuates greatly when sample size is small.
         ],
     )
     def test_sample_fraction(self, simple_bam, sample_fraction, expected_fraction):

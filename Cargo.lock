@@ -6554,6 +6554,7 @@ dependencies = [
 name = "pynanalogue"
 version = "0.1.6"
 dependencies = [
+ "mimalloc",
  "nanalogue",
  "polars 0.52.0",
  "pyo3",
