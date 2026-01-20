@@ -115,6 +115,3 @@ strip = true           # Remove debug symbols
 # Development profile for faster iteration
 [profile.dev]
 opt-level = 0          # No optimization for faster compilation
-
-[target.'cfg(target_env = "musl")'.dependencies]
-mimalloc = "0.1.48"

@@ -8,7 +8,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [0.1.6] - 2026-01-20
 
 ### Added
-- mimalloc allocator for musl builds to improve performance (musl's default allocator is 2-3x slower in our benchmarks)
 - New `peek()` function to extract BAM file metadata (contigs and modifications) without full processing
 - New `seq_table()` function to extract read sequences and base qualities for a genomic region as a Polars DataFrame, with insertions shown as lowercase, deletions as periods, and modifications as 'Z'
 - New `tag` parameter for `polars_bam_mods`, `read_info`, `window_reads`, and `seq_table` functions to filter by specific modification type (e.g., single-letter code "m" or ChEBI code "76792")

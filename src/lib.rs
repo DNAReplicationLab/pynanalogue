@@ -34,12 +34,6 @@ use std::num::NonZeroU32;
 use std::str::FromStr as _;
 use url::{ParseError, Url};
 
-// Avoid musl's default allocator due to lackluster performance
-// https://nickb.dev/blog/default-musl-allocator-considered-harmful-to-performance
-#[cfg(target_env = "musl")]
-#[global_allocator]
-static GLOBAL: mimalloc::MiMalloc = mimalloc::MiMalloc;
-
 /// Converts a `nanalogue_core::Error` to a `PyException` through `Display`
 macro_rules! py_exception {
     ($a:expr) => {
