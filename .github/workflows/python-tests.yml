@@ -138,7 +138,7 @@ jobs:
         run: |
           . "$HOME/.cargo/env"
           /opt/python/cp311-cp311/bin/maturin build --release
-          /opt/python/cp311-cp311/bin/python3 -m pip install ./target/wheels/pynanalogue-0.1.0-cp39-abi3-musllinux_1_2_x86_64.whl
+          /opt/python/cp311-cp311/bin/python3 -m pip install target/wheels/*.whl
 
       - name: Create benchmark storage directory
         run: mkdir -p ${{ github.workspace }}/benchmarks

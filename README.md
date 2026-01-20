@@ -27,7 +27,6 @@ But the table of contents is correct.
 - [Requirements](#requirements)
 - [Installation](#installation)
   - [More details](#more-details)
-  - [Note on musllinux](#note-on-musllinux)
 - [Functions](#functions)
   - [Peek](#peek)
     - [Documentation](#documentation)
@@ -69,14 +68,6 @@ pip install pynanalogue
 
 Common wheels (`manylinux/mac`) are available in PyPI.
 Please open an issue if you want more wheels!
-
-### Note on musllinux
-
-Although we have a `musllinux` wheel, a package we depend on (`polars-runtime-32`) does not
-have one (see this [issue](https://github.com/pola-rs/polars/issues/25568)), which means
-you may have to build the wheel yourself during installation. Please open an issue if you
-spot that this has changed! This issue affects only those that use an Alpine Linux distribution
-or similar. If you are using Ubuntu/Debian/Fedora etc., this issue should not affect you.
 
 # Functions
 
