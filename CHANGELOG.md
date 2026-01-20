@@ -5,16 +5,23 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [0.1.6] - 2026-01-19
+## [0.1.6] - 2026-01-20
 
 ### Added
 - New `peek()` function to extract BAM file metadata (contigs and modifications) without full processing
-- New `tag` parameter for `polars_bam_mods`, `read_info`, and `window_reads` functions to filter by specific modification type (e.g., single-letter code "m" or ChEBI code "76792")
-- Comprehensive filtering parameter tests for `polars_bam_mods`, `read_info`, and `window_reads` functions
+- New `seq_table()` function to extract read sequences and base qualities for a genomic region as a Polars DataFrame, with insertions shown as lowercase, deletions as periods, and modifications as 'Z'
+- New `tag` parameter for `polars_bam_mods`, `read_info`, `window_reads`, and `seq_table` functions to filter by specific modification type (e.g., single-letter code "m" or ChEBI code "76792")
+- New `win_op` parameter for `window_reads()` function supporting "density" (default) and "grad_density" modes to measure modification density or gradient within each window
+- PyPI publishing via GitHub Actions using OIDC trusted publishing
+- Comprehensive filtering parameter tests for `polars_bam_mods`, `read_info`, `window_reads`, and `seq_table` functions
+- Gradient window tests with new example BAM files (`example_10`, `example_11`)
 - New `two_mods_bam` test fixture for testing multiple modification types
+- New pynanalogue-specific test data files for `seq_table` testing
 
 ### Changed
 - Updated nanalogue dependency from 0.1.4 to 0.1.6
+- Consolidated `build-wheels.yml` into `publish_to_pypi.yml` workflow
+- Re-enabled musl benchmark job in CI
 - Renamed `test_filtering.py` to `test_polars_bam_mods_filtering.py` for clarity
 
 ### Fixed

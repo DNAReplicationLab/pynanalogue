@@ -102,9 +102,6 @@ jobs:
 
   benchmark_musl:
     name: Benchmarks (musl)
-    # A dependency `polars-runtime-32` has no musllinux wheel currently.
-    # So this job takes too long, so we've switched it off for the time being.
-    if: false
     runs-on: ubuntu-latest
     container:
       image: quay.io/pypa/musllinux_1_2_x86_64

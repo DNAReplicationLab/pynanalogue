@@ -29,15 +29,22 @@ But the table of contents is correct.
   - [More details](#more-details)
   - [Note on musllinux](#note-on-musllinux)
 - [Functions](#functions)
-  - [Read info](#read-info)
+  - [Peek](#peek)
     - [Documentation](#documentation)
     - [Sample input and output](#sample-input-and-output)
-  - [Window reads](#window-reads)
+  - [Read info](#read-info)
     - [Documentation](#documentation-1)
     - [Sample input and output](#sample-input-and-output-1)
-  - [Polars bam mods](#polars-bam-mods)
+  - [Window reads](#window-reads)
     - [Documentation](#documentation-2)
     - [Sample input and output](#sample-input-and-output-2)
+    - [Gradient mode](#gradient-mode)
+  - [Seq table](#seq-table)
+    - [Documentation](#documentation-3)
+    - [Sample input and output](#sample-input-and-output-3)
+  - [Polars bam mods](#polars-bam-mods)
+    - [Documentation](#documentation-4)
+    - [Sample input and output](#sample-input-and-output-4)
   - [Simulate mod bam](#simulate-mod-bam)
     - [Example](#example)
 - [Further documentation](#further-documentation)
@@ -82,6 +89,43 @@ a specific mapping type (`read_filter`), filter modification data suitably
 (`min_mod_qual`, `reject_mod_qual_non_inclusive`) etc.
 Please see each section below for the list of options, which you can access by
 reading the docstring of each function.
+
+## Peek
+
+Quickly extract BAM file metadata without processing all records.
+This function returns information about contigs (reference sequences) and
+modifications present in the BAM file, making it useful for understanding
+the structure of your data before running more intensive analyses.
+
+### Documentation
+
+```python
+import pynanalogue as pn
+print(pn.peek.__doc__)
+```
+
+### Sample input and output
+
+A sample execution and output follows.
+
+```python
+import pynanalogue as pn
+metadata = pn.peek("tests/data/examples/example_1.bam")
+print(metadata)
+```
+
+The output is a dictionary with two keys: `contigs` and `modifications`.
+
+```python
+{
+    'contigs': {'dummyI': 22, 'dummyII': 48, 'dummyIII': 76},
+    'modifications': [['G', '-', '7200'], ['T', '+', 'T']]
+}
+```
+
+The `contigs` dictionary maps contig names to their lengths.
+The `modifications` list contains modification information as `[base, strand, code]` where
+`+` indicates the basecalled strand and `-` indicates its complement.
 
 ## Read info
 
@@ -179,6 +223,79 @@ dummyII	22	24	fffffff1-10d2-49cb-8ca3-e8d48979001b	0.5	-	T	+	T	19	21	255
 .	-1	-1	a4f36092-b4d5-47a9-813e-c22c3b477a0c	0	.	T	+	T	27	40	255
 .	-1	-1	a4f36092-b4d5-47a9-813e-c22c3b477a0c	0.5	.	T	+	T	39	48	255
 ```
+
+### Gradient mode
+
+The `window_reads` function supports a `win_op` parameter that controls the windowing operation.
+By default, `win_op="density"` reports the modification density within each window.
+Setting `win_op="grad_density"` instead reports the gradient (slope) of modification density
+within each window, which can be useful for detecting transitions in modification patterns.
+
+```python
+import pynanalogue as pn
+df = pn.window_reads(
+    "tests/data/examples/example_10.bam",
+    win=10,
+    step=1,
+    win_op="grad_density"
+)
+```
+
+The output format is identical to the density mode, but the `win_val` column now contains
+the gradient value instead of the density value.
+
+## Seq table
+
+Extract read sequences and base qualities for a genomic region as a Polars DataFrame.
+This function is useful for retrieving sequences from a particular region
+with modification information overlaid. If mods are not present or the modification
+probabilities are not high enough, then they are not shown.
+Insertions are shown as lowercase letters, deletions as periods (`.`),
+and modified bases as `Z` (or `z` for modifications in insertions).
+
+### Documentation
+
+```python
+import pynanalogue as pn
+print(pn.seq_table.__doc__)
+```
+
+### Sample input and output
+
+A sample execution follows. Note that the `region` parameter is required.
+
+```python
+import pynanalogue as pn
+df = pn.seq_table(
+    "tests/data/examples/example_pynanalogue_1.bam",
+    region="contig_00000:0-10"
+)
+print(df)
+```
+
+The output is a Polars DataFrame with three columns: `read_id`, `sequence`, and `qualities`.
+
+```text
+shape: (2, 3)
+┌─────────────────────────────────┬────────────┬───────────────────────────────┐
+│ read_id                         ┆ sequence   ┆ qualities                     │
+│ ---                             ┆ ---        ┆ ---                           │
+│ str                             ┆ str        ┆ str                           │
+╞═════════════════════════════════╪════════════╪═══════════════════════════════╡
+│ xxxxxxxx-xxxx-xxxx-xxxx-xxxxxx… ┆ ACGTACGTAC ┆ 30.30.30.30.30.30.30.30.30.30 │
+│ xxxxxxxx-xxxx-xxxx-xxxx-xxxxxx… ┆ AZGTAZGTAZ ┆ 20.20.20.20.20.20.20.20.20.20 │
+└─────────────────────────────────┴────────────┴───────────────────────────────┘
+```
+
+Sequence column conventions:
+- Uppercase letters: bases aligned to reference
+- Lowercase letters: inserted bases
+- `.` (period): deleted bases
+- `Z`: modified base on the reference
+- `z`: modified base in an insertion
+
+The qualities column contains period-separated base quality scores (0-255),
+with 255 indicating a deleted position or unknown quality.
 
 ## Polars bam mods
 

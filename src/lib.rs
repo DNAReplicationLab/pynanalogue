@@ -18,12 +18,12 @@
 //! patterns in scientific Python libraries. For a solo-maintained side project, this
 //! tradeoff values shipping a usable Python package over internal Rust maintainability.
 use nanalogue_core::{
-    BamPreFilt as _, BamRcRecords, CurrRead, Error, F32Bw0and1, InputBam, InputBamBuilder,
-    InputMods, InputModsBuilder, InputWindowingBuilder, OptionalTag, OrdPair, PathOrURLOrStdin,
-    SimulationConfig, ThresholdState, analysis, curr_reads_to_dataframe,
-    nanalogue_indexed_bam_reader, nanalogue_indexed_bam_reader_from_url, peek as rust_peek,
-    read_info as rust_read_info, simulate_mod_bam as rust_simulate_mod_bam,
-    window_reads as rust_window_reads,
+    BamPreFilt as _, BamRcRecords, CurrRead, Error, F32Bw0and1, GenomicRegion, InputBam,
+    InputBamBuilder, InputMods, InputModsBuilder, InputWindowingBuilder, OptionalTag, OrdPair,
+    PathOrURLOrStdin, SeqDisplayOptions, SimulationConfig, ThresholdState, analysis,
+    curr_reads_to_dataframe, nanalogue_indexed_bam_reader, nanalogue_indexed_bam_reader_from_url,
+    peek as rust_peek, read_info as rust_read_info, reads_table as rust_reads_table,
+    simulate_mod_bam as rust_simulate_mod_bam, window_reads as rust_window_reads,
 };
 use pyo3::prelude::*;
 use pyo3::types::{PyDict, PyList};
@@ -403,8 +403,10 @@ fn read_info(
     Ok(buffer)
 }
 
-/// Runs `nanalogue_core::window_reads::run_df` and gets output as a Polars `DataFrame`.
-/// The output is a BED format, with windowed densities per read.
+/// Window modification density across single molecules and return a Polars `DataFrame`.
+/// With the gradient option, the gradient in mod density within each window is reported.
+/// The output is a BED format, with windowed densities per window per read.
+/// Details: runs `nanalogue_core::window_reads::run_df`.
 ///
 /// Sets various options through builder functions before running
 /// the function and capturing the output (see `Example Output`).
@@ -417,6 +419,9 @@ fn read_info(
 ///     If a read has multiple mods, then multiple windows are set up such that
 ///     each window has the specified number of bases of that type in it.
 /// step (int): Length by which the window is slid in the same units as win above.
+/// win_op (optional, str): Type of windowing operation to use, allows "density" and
+///     "grad_density" i.e. measure modification density or the gradient of it within
+///     each window. Default is "density".
 /// treat_as_url (optional, bool): If True, treat `bam_path` as a URL, default False.
 /// min_seq_len (optional, int): Only retain sequences above this length, default 0.
 /// min_align_len (optional, int): Only retain sequences with an alignment length above this
@@ -475,6 +480,10 @@ fn read_info(
 ///
 /// # Example output
 ///
+/// If the dataframe were converted to a TSV format, it might look like the following.
+/// The basecalling qualities are all 255 i.e. unknown because this is a BAM file where basecalling
+/// qualities haven't been recorded.
+///
 /// ```text
 /// #contig	ref_win_start	ref_win_end	read_id	win_val	strand	base	mod_strand	mod_type	win_start	win_end	basecall_qual
 /// dummyIII	26	32	a4f36092-b4d5-47a9-813e-c22c3b477a0c	1	+	T	+	T	3	9	255
@@ -484,6 +493,21 @@ fn read_info(
 /// .	-1	-1	a4f36092-b4d5-47a9-813e-c22c3b477a0c	1	.	T	+	T	3	9	255
 /// .	-1	-1	a4f36092-b4d5-47a9-813e-c22c3b477a0c	0.5	.	T	+	T	8	28	255
 /// .	-1	-1	a4f36092-b4d5-47a9-813e-c22c3b477a0c	0.5	.	T	+	T	39	48	255
+/// ```
+///
+/// Under the gradient option, `win_val` reports the gradient in modification density within each window.
+///
+/// ```text
+/// #contig ref_win_start   ref_win_end     read_id win_val strand  base    mod_strand      mod_type       win_start        win_end basecall_qual
+/// dummyIII    40  50  c4f36092-b4d5-47a9-813e-c22c3b477a0c    0.054545455 +   N   +   N   17  27  255
+/// dummyIII    41  51  c4f36092-b4d5-47a9-813e-c22c3b477a0c    0.096969694 +   N   +   N   18  28  255
+/// dummyIII    42  52  c4f36092-b4d5-47a9-813e-c22c3b477a0c    0.12727273  +   N   +   N   19  29  255
+/// dummyIII    43  53  c4f36092-b4d5-47a9-813e-c22c3b477a0c    0.14545454  +   N   +   N   20  30  255
+/// dummyIII    44  54  c4f36092-b4d5-47a9-813e-c22c3b477a0c    0.15151516  +   N   +   N   21  31  255
+/// dummyIII    45  55  c4f36092-b4d5-47a9-813e-c22c3b477a0c    0.14545454  +   N   +   N   22  32  255
+/// dummyIII    46  56  c4f36092-b4d5-47a9-813e-c22c3b477a0c    0.12727273  +   N   +   N   23  33  255
+/// dummyIII    47  57  c4f36092-b4d5-47a9-813e-c22c3b477a0c    0.096969694 +   N   +   N   24  34  255
+/// dummyIII    48  58  c4f36092-b4d5-47a9-813e-c22c3b477a0c    0.054545455 +   N   +   N   25  35  255
 /// ```
 ///
 /// # Errors
@@ -500,7 +524,7 @@ fn read_info(
     reason = "See module-level doc 'Design Philosophy: Many Parameters vs Parameter Objects'"
 )]
 #[pyfunction]
-#[pyo3(signature = (bam_path, win, step, treat_as_url = false, min_seq_len = 0, min_align_len = 0,
+#[pyo3(signature = (bam_path, win, step, win_op = "density", treat_as_url = false, min_seq_len = 0, min_align_len = 0,
                     read_ids = HashSet::<String>::new(), threads = 2, include_zero_len = false,
                     read_filter = "", sample_fraction = 1.0, mapq_filter = 0,
                     exclude_mapq_unavail = false, region = "", full_region = false,
@@ -511,6 +535,7 @@ fn window_reads(
     bam_path: &str,
     win: usize,
     step: usize,
+    win_op: &str,
     treat_as_url: bool,
     min_seq_len: u64,
     min_align_len: i64,
@@ -568,14 +593,27 @@ fn window_reads(
     let bam_rc_records =
         BamRcRecords::new(&mut reader, &mut bam, &mut mods).map_err(|e| py_exception!(e))?;
 
-    let df = rust_window_reads::run_df(
-        bam_rc_records
-            .rc_records
-            .filter(|r| r.as_ref().map_or(true, |v| v.pre_filt(&bam))),
-        win_options,
-        &mods,
-        |x| analysis::threshold_and_mean(x).map(Into::into),
-    )
+    let df = match win_op {
+        "density" => rust_window_reads::run_df(
+            bam_rc_records
+                .rc_records
+                .filter(|r| r.as_ref().map_or(true, |v| v.pre_filt(&bam))),
+            win_options,
+            &mods,
+            |x| analysis::threshold_and_mean(x).map(Into::into),
+        ),
+        "grad_density" => rust_window_reads::run_df(
+            bam_rc_records
+                .rc_records
+                .filter(|r| r.as_ref().map_or(true, |v| v.pre_filt(&bam))),
+            win_options,
+            &mods,
+            analysis::threshold_and_gradient,
+        ),
+        _ => Err(Error::InvalidState(String::from(
+            "win_op must be set to density or grad_density",
+        ))),
+    }
     .map_err(|e| py_exception!(e))?;
 
     // return output
@@ -774,6 +812,187 @@ fn polars_bam_mods(
     // Convert to DataFrame
     let df =
         curr_reads_to_dataframe(df_collection.as_slice()).map_err(|e: Error| py_exception!(e))?;
+
+    // return output
+    Ok(PyDataFrame(df))
+}
+
+/// Returns a Polars `DataFrame` with read sequence and quality information for a genomic region.
+/// Represents insertions as lowercase, deletions as periods, and modifications as 'Z'.
+/// Basecalling qualities represented as a string of numbers separated by periods, with value set
+/// to '255' at a deleted base.
+///
+/// Calls `nanalogue_core::reads_table::run_df` to extract read sequences and qualities
+/// from a specified genomic region. The output DataFrame contains columns for read ID,
+/// sequence (with modifications shown as 'Z'), and base qualities.
+///
+/// # Args
+/// bam_path (str): Path to the BAM file. Must be associated with a BAM index.
+/// region (str): Genomic region from which to extract sequences. Required.
+///     Use the format "contig", "contig:start-", or "contig:start-end". These are 0-based,
+///     half-open intervals.
+/// treat_as_url (optional, bool): If True, treat `bam_path` as a URL, default False.
+/// min_seq_len (optional, int): Only retain sequences above this length, default 0.
+/// min_align_len (optional, int): Only retain sequences with an alignment length above this
+///     value. Defaults to unused.
+/// read_ids (optional, set of str): Only retrieve these read ids, defaults to unused.
+/// threads (optional, int): Number of threads used in some aspects of program execution, defaults to 2.
+/// include_zero_len (optional, bool): Include sequences of zero length. WARNING: our program
+///     may crash if you do this. Defaults to False.
+/// read_filter (optional, str): Comma-separated sequence of one to many of the following
+///     strings: primary_forward, primary_reverse, secondary_forward, secondary_reverse,
+///     supplementary_forward, supplementary_reverse, unmapped. If specified, only reads
+///     with a mapping belonging to this set are retained. Defaults to no filter.
+/// sample_fraction (optional, float): Set to between 0 and 1 to subsample BAM file.
+///     WARNING: seeds are not set, so you may get a new set of reads every time.
+/// mapq_filter (optional, int): Exclude reads with mapping quality below this number.
+///     defaults to unused.
+/// exclude_mapq_unavail (optional, bool): Exclude reads where mapping quality is unavailable.
+///     defaults to false.
+/// tag (optional, str): If set, only this type of modification is processed. Input is a
+///     string type, for example a single-letter code "m", a number as a string "76792" etc.
+///     Defaults to processing all modifications.
+/// mod_strand (optional, str): Set this to `bc` or `bc_comp` to retrieve information
+///     about mods only from the basecalled strand or only from its complement.
+///     Defaults to not filter.
+/// min_mod_qual (optional, int): Set to a number 0-255. Reject modification
+///     calls whose probability is below this value. Defaults to 0.
+/// reject_mod_qual_non_inclusive (optional, (int, int)): Reject modification
+///     calls whose probability is such that int_low < prob < int_high.
+///     Defaults to no filtering.
+/// trim_read_ends_mod (optional, int): Reject modification information
+///     within so many bp of either end of the read. Defaults to 0.
+/// base_qual_filter_mod (optional, int): Reject modification information
+///     on any base whose basecalling quality is below this number. Defaults to 0.
+///
+/// # Returns
+///
+/// A Polars dataframe with columns: `read_id`, `sequence`, `qualities`.
+///
+/// Sequence column conventions:
+/// - Insertions are shown in lowercase
+/// - Deletions are shown as periods (`.`)
+/// - Modified bases on the reference are shown as `Z`
+/// - Modified bases in an insertion are shown as `z`
+///
+/// Qualities column: a period-separated string of integer quality scores,
+/// with one score per base in the sequence.
+///
+/// # Example output
+///
+/// If the polars dataframe were converted to a plain-text table, it might look like:
+///
+/// ```text
+/// read_id	sequence	qualities
+/// 5d10eb9a-aae1-4db8-8ec6-7ebb34d32575	ACGTZac..TZgt	30.35.40.38.42.20.22.255.255.41.25.28.30
+/// a4f36092-b4d5-47a9-813e-c22c3b477a0c	TGCAZz.ATGCA	28.33.39.41.40.18.255.36.42.38.35.30
+/// ```
+///
+/// # Errors
+/// If the region parameter is empty, if building of option-related structs fails,
+/// if BAM input cannot be obtained, if preparing records fails, or if running the
+/// `nanalogue_core::reads_table::run_df` function fails
+#[expect(
+    clippy::doc_markdown,
+    reason = "Python bindings use Python-style documentation conventions"
+)]
+#[expect(
+    clippy::too_many_arguments,
+    reason = "See module-level doc 'Design Philosophy: Many Parameters vs Parameter Objects'"
+)]
+#[pyfunction]
+#[pyo3(signature = (bam_path, region, treat_as_url = false, min_seq_len = 0, min_align_len = 0,
+                    read_ids = HashSet::<String>::new(), threads = 2, include_zero_len = false,
+                    read_filter = "", sample_fraction = 1.0, mapq_filter = 0,
+                    exclude_mapq_unavail = false, tag = "", mod_strand = "", min_mod_qual = 0,
+                    reject_mod_qual_non_inclusive = (0, 0), trim_read_ends_mod = 0,
+                    base_qual_filter_mod = 0))]
+fn seq_table(
+    bam_path: &str,
+    region: &str,
+    treat_as_url: bool,
+    min_seq_len: u64,
+    min_align_len: i64,
+    read_ids: HashSet<String>,
+    threads: u8,
+    include_zero_len: bool,
+    read_filter: &str,
+    sample_fraction: f32,
+    mapq_filter: u8,
+    exclude_mapq_unavail: bool,
+    tag: &str,
+    mod_strand: &str,
+    min_mod_qual: u8,
+    reject_mod_qual_non_inclusive: (u8, u8),
+    trim_read_ends_mod: usize,
+    base_qual_filter_mod: u8,
+) -> PyResult<PyDataFrame> {
+    // region is required for SeqDisplayOptions::Region
+    if region.is_empty() {
+        return Err(py_value_error!(
+            "region parameter is required for seq_table (cannot be empty)"
+        ));
+    }
+
+    // get input options with full_region = true and mod_region = region
+    let (mut bam, mut mods) = parse_input_options(
+        bam_path,
+        treat_as_url,
+        min_seq_len,
+        min_align_len,
+        read_ids,
+        threads,
+        include_zero_len,
+        read_filter,
+        sample_fraction,
+        mapq_filter,
+        exclude_mapq_unavail,
+        region,
+        true, // full_region hardcoded to true
+        tag,
+        mod_strand,
+        min_mod_qual,
+        reject_mod_qual_non_inclusive,
+        trim_read_ends_mod,
+        base_qual_filter_mod,
+        region, // mod_region same as region
+    )?;
+
+    // get input data
+    let mut reader = load_bam(bam.clone())?;
+
+    let bam_rc_records =
+        BamRcRecords::new(&mut reader, &mut bam, &mut mods).map_err(|e| py_exception!(e))?;
+
+    // Parse region to GenomicRegion then convert to Bed3 for SeqDisplayOptions
+    let genomic_region = GenomicRegion::from_str(region).map_err(|e: Error| py_value_error!(e))?;
+    let region_bed3 = genomic_region
+        .try_to_bed3(&bam_rc_records.header)
+        .map_err(|e: Error| py_value_error!(e))?;
+
+    // Create SeqDisplayOptions::Region with specified settings
+    let seq_display = SeqDisplayOptions::Region {
+        show_base_qual: true,
+        show_ins_lowercase: true,
+        region: region_bed3,
+        show_mod_z: true,
+    };
+
+    // Call reads_table::run_df with seq_summ_path = ""
+    let full_df = rust_reads_table::run_df(
+        bam_rc_records
+            .rc_records
+            .filter(|r| r.as_ref().map_or(true, |v| v.pre_filt(&bam))),
+        Some(mods),
+        seq_display,
+        "", // seq_summ_path empty
+    )
+    .map_err(|e| py_exception!(e))?;
+
+    // Select only the required columns: read_id, sequence, qualities
+    let df = full_df
+        .select(["read_id", "sequence", "qualities"])
+        .map_err(|e| py_exception!(e))?;
 
     // return output
     Ok(PyDataFrame(df))
@@ -999,11 +1218,12 @@ fn peek(py: Python<'_>, bam_path: &str, treat_as_url: bool) -> PyResult<Py<PyDic
 /// `PyO3` errors
 #[pymodule]
 fn pynanalogue(m: &Bound<'_, PyModule>) -> PyResult<()> {
-    m.add_function(wrap_pyfunction!(peek, m)?)?;
     m.add_function(wrap_pyfunction!(read_info, m)?)?;
     m.add_function(wrap_pyfunction!(window_reads, m)?)?;
     m.add_function(wrap_pyfunction!(polars_bam_mods, m)?)?;
+    m.add_function(wrap_pyfunction!(seq_table, m)?)?;
     m.add_function(wrap_pyfunction!(simulate_mod_bam, m)?)?;
+    m.add_function(wrap_pyfunction!(peek, m)?)?;
 
     Ok(())
 }

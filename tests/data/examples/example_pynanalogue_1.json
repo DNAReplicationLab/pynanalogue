@@ -1,0 +1,37 @@
+{
+    "contigs": {
+        "number": 1,
+        "len_range": [200, 200],
+        "repeated_seq": "ACGT"
+    },
+    "reads": [
+        {
+            "number": 1,
+            "len_range": [1.0, 1.0],
+            "base_qual_range": [20, 20],
+            "delete": [0.1, 0.3],
+            "insert_middle": "CTCT",
+            "mods": [{
+                "base": "C",
+                "is_strand_plus": true,
+                "mod_code": "m",
+                "win": [1],
+                "mod_range": [[0.6, 0.6]]
+            }]
+        },
+        {
+            "number": 1,
+            "len_range": [1.0, 1.0],
+            "base_qual_range": [30, 30],
+            "insert_middle": "CTCT",
+            "delete": [0.1, 0.3],
+            "mods": [{
+                "base": "C",
+                "is_strand_plus": true,
+                "mod_code": "m",
+                "win": [1],
+                "mod_range": [[0.4, 0.4]]
+            }]
+        }
+    ]
+}
