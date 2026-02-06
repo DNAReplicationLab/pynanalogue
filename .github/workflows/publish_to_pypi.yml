@@ -6,8 +6,29 @@ on:
   workflow_dispatch:  # Allow manual triggering
 
 jobs:
+  version_check:
+    name: Verify version matches release tag
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - name: Install yq
+        run: sudo snap install yq
+      - name: Check versions match tag
+        if: github.event_name == 'release'
+        run: |
+          TAG="${{ github.event.release.tag_name }}"
+          TAG_VERSION="${TAG#v}"
+          TOML_VERSION=$(yq -p toml -oy '.package.version' Cargo.toml)
+          LOCK_VERSION=$(yq -p toml -oy '.package[] | select(.name == "pynanalogue") | .version' Cargo.lock)
+          PYPROJECT_VERSION=$(yq -p toml -oy '.project.version' pyproject.toml)
+          echo "Tag: $TAG_VERSION | Cargo.toml: $TOML_VERSION | Cargo.lock: $LOCK_VERSION | pyproject.toml: $PYPROJECT_VERSION"
+          [ "$TOML_VERSION" = "$TAG_VERSION" ] || { echo "ERROR: Cargo.toml version ($TOML_VERSION) != tag ($TAG_VERSION)"; exit 1; }
+          [ "$LOCK_VERSION" = "$TAG_VERSION" ] || { echo "ERROR: Cargo.lock version ($LOCK_VERSION) != tag ($TAG_VERSION)"; exit 1; }
+          [ "$PYPROJECT_VERSION" = "$TAG_VERSION" ] || { echo "ERROR: pyproject.toml version ($PYPROJECT_VERSION) != tag ($TAG_VERSION)"; exit 1; }
+
   build_macos_wheels:
     name: Build wheels on ${{ matrix.os }}
+    needs: [version_check]
     runs-on: ${{ matrix.os }}
     strategy:
       matrix:
@@ -36,6 +57,7 @@ jobs:
 
   build_linux_wheels:
     name: Build wheels on ${{ matrix.container }}
+    needs: [version_check]
     runs-on: ${{ matrix.runner }}
     strategy:
       matrix:
@@ -147,6 +169,7 @@ jobs:
 
   build_sdist:
     name: Build source distribution
+    needs: [version_check]
     runs-on: ubuntu-latest
     steps:
       - name: Checkout code

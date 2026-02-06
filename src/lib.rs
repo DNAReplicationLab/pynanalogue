@@ -121,14 +121,7 @@ fn parse_input_options(
                 .ok_or(py_value_error!("threads must be a positive integer"))?,
         )
         .include_zero_len(include_zero_len)
-        .read_filter({
-            // Trim whitespace from comma-separated tokens
-            read_filter
-                .split(',')
-                .map(str::trim)
-                .collect::<Vec<_>>()
-                .join(",")
-        })
+        .read_filter(read_filter.to_string())
         .sample_fraction(F32Bw0and1::new(sample_fraction).map_err(|e| py_value_error!(e))?)
         .mapq_filter(mapq_filter)
         .exclude_mapq_unavail(exclude_mapq_unavail)
