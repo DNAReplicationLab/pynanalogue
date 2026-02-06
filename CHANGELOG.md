@@ -9,9 +9,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 - Removed redundant whitespace trimming for read_filter in Python bindings (handled by nanalogue library)
+- Updated README code examples to show complete, reproducible output matching actual program behaviour
 
 ### Added
 - Version check job in PyPI publish workflow (internal GitHub Actions change) to verify tag, Cargo.toml, Cargo.lock, and pyproject.toml versions match before building wheels
+- Automated README example testing (`tests/test_readme_examples.py`) that extracts code blocks and expected output from HTML comment markers in README.md and verifies they match
 
 ## [0.1.6] - 2026-01-20
 
