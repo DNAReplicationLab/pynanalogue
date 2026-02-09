@@ -7,9 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.7] - 2026-02-09
+
 ### Changed
 - Removed redundant whitespace trimming for read_filter in Python bindings (handled by nanalogue library)
 - Updated README code examples to show complete, reproducible output matching actual program behaviour
+- Bumps nanalogue version to v0.1.7, this fixes a peek bug when zero len reads are encountered.
 
 ### Added
 - Version check job in PyPI publish workflow (internal GitHub Actions change) to verify tag, Cargo.toml, Cargo.lock, and pyproject.toml versions match before building wheels
