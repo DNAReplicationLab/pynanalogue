@@ -46,6 +46,7 @@ But the table of contents is correct.
     - [Sample input and output](#sample-input-and-output-4)
   - [Simulate mod bam](#simulate-mod-bam)
     - [Example](#example)
+- [Filtering Options](#filtering-options)
 - [Further documentation](#further-documentation)
 - [Versioning](#versioning)
 - [Acknowledgments](#acknowledgments)
@@ -72,14 +73,8 @@ Please open an issue if you want more wheels!
 # Functions
 
 Our package exposes the following python functions.
-They usually have lots of optional arguments.
-Among other operations, the options allow you to subsample the BAM file (`sample_fraction`),
-restrict read and/or modification data to a specific genomic region (`region` or `mod_region`),
-restrict by one or several read ids (`read_ids`),
-a specific mapping type (`read_filter`), filter modification data suitably
-(`min_mod_qual`, `reject_mod_qual_non_inclusive`) etc.
-Please see each section below for the list of options, which you can access by
-reading the docstring of each function.
+All read-processing functions share a common set of optional filtering arguments;
+see the [Filtering Options](#filtering-options) table for the full list.
 
 ## Peek
 
@@ -223,7 +218,7 @@ print(df.write_csv(separator='\t'), end='')
 <!-- TEST CODE: END window_reads -->
 
 The output is a polars dataframe printed as TSV.
-(This was generated from a file without basecalling quality information, which is why we show 255s here).
+(This was generated from a file without basecalling quality information, which is why 255s are shown under basecall\_qual).
 
 <!-- TEST OUTPUT: START window_reads -->
 ```text
@@ -504,6 +499,36 @@ fasta_path="output.fasta"
 )
 ```
 <!-- TEST CODE: END simulate_mod_bam -->
+
+# Filtering Options
+
+All read-processing functions (`read_info`, `window_reads`, `polars_bam_mods`, `seq_table`)
+support the filtering options below. `peek` only supports `treat_as_url`.
+`seq_table` requires `region` and does not accept `full_region` or `mod_region`.
+Function-specific required parameters (e.g. `win`, `step` for `window_reads`)
+are documented in each function's section above.
+
+| Option | Type | Default | Description |
+|--------|------|---------|-------------|
+| `treat_as_url` | bool | False | Treat `bam_path` as a URL instead of a file path |
+| `region` | str | "" | Genomic region filter (e.g. "chr1:1000-2000"). Format: "contig", "contig:start-", or "contig:start-end" (0-based, half-open) |
+| `full_region` | bool | False | Only include reads that fully span the region |
+| `read_filter` | str | "" | Comma-separated alignment types to retain (e.g. "primary_forward,primary_reverse,unmapped") |
+| `read_ids` | set[str] | {} | Restrict to specific read IDs |
+| `min_seq_len` | int | 0 | Minimum sequence length |
+| `min_align_len` | int | 0 | Minimum alignment length |
+| `mapq_filter` | int | 0 | Minimum mapping quality |
+| `exclude_mapq_unavail` | bool | False | Exclude reads without mapping quality |
+| `include_zero_len` | bool | False | Include zero-length sequences (experimental, may crash) |
+| `sample_fraction` | float | 1.0 | Subsample reads with this probability (0.0 to 1.0, unseeded) |
+| `threads` | int | 2 | Number of threads for BAM reading |
+| `tag` | str | "" | Filter by modification type (e.g. "m" for 5mC, or a ChEBI code like "76792") |
+| `mod_strand` | str | "" | Filter by modification strand: "bc" (basecalled) or "bc_comp" (complement) |
+| `min_mod_qual` | int | 0 | Minimum modification quality threshold (0-255) |
+| `reject_mod_qual_non_inclusive` | (int, int) | (0, 0) | Reject mods where low < probability < high (0-255 scale) |
+| `trim_read_ends_mod` | int | 0 | Trim modification info from this many bp at each read end |
+| `base_qual_filter_mod` | int | 0 | Minimum basecalling quality for modification data |
+| `mod_region` | str | "" | Restrict modification data to a genomic region (same format as `region`) |
 
 # Further documentation
 
