@@ -48,7 +48,7 @@ jobs:
 
       - name: (disable for now) Upload coverage to Codecov
         if: false && matrix.os == 'ubuntu-latest' && matrix.python-version == '3.11'
-        uses: codecov/codecov-action@v5
+        uses: codecov/codecov-action@v7
         with:
           file: ./coverage.xml
           flags: unittests
