@@ -30,6 +30,7 @@ def _test_polars_bam_mods_against_expected(example_number):
     schema = {
         "read_id": pl.Utf8,
         "seq_len": pl.UInt64,
+        "mapq": pl.UInt32,
         "alignment_type": pl.Utf8,
         "align_start": pl.UInt64,
         "align_end": pl.UInt64,
@@ -77,6 +78,7 @@ def test_polars_bam_mods_basic(simple_bam):
     expected_columns = {
         "read_id",
         "seq_len",
+        "mapq",
         "alignment_type",
         "align_start",
         "align_end",

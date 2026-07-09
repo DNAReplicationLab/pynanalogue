@@ -294,6 +294,7 @@ fn load_bam(bam: InputBam) -> PyResult<rust_htslib::bam::IndexedReader> {
 /// {
 ///    "read_id": "cd623d4a-510d-4c6c-9d88-10eb475ac59d",
 ///    "sequence_length": 2104,
+///    "mapq": 255,
 ///    "contig": "contig_0",
 ///    "reference_start": 7369,
 ///    "reference_end": 9473,
@@ -303,6 +304,10 @@ fn load_bam(bam: InputBam) -> PyResult<rust_htslib::bam::IndexedReader> {
 /// }
 /// ]
 /// ```
+///
+/// Here, `mapq` follows SAM/BAM conventions: `255` means mapping quality is unavailable,
+/// while `0` is a valid mapping quality value and is commonly seen on unmapped reads.
+/// This is the same field used by `mapq_filter` and `exclude_mapq_unavail`.
 ///
 /// When mods are not available, you will see `NA` in the `mod_count` field.
 ///
@@ -614,9 +619,11 @@ fn window_reads(
 }
 
 /// Converts modification data in mod BAM files into a Polars `Dataframe`.
-/// Columns are `read_id`, `seq_len`, `alignment_type`, `align_start`, `align_end`,
+/// Columns are `read_id`, `seq_len`, `mapq`, `alignment_type`, `align_start`, `align_end`,
 /// `contig`, `contig_id`, `base`, `is_strand_plus`, `mod_code`, `position`, `ref_position`,
-/// and `mod_quality`.
+/// and `mod_quality`. The `mapq` column follows SAM/BAM conventions: `255` means mapping
+/// quality is unavailable, while `0` is a valid mapping quality value. This is the same
+/// field used by `mapq_filter` and `exclude_mapq_unavail`.
 ///
 /// Sets various options through builder functions before running
 /// the function and capturing the output.
@@ -806,7 +813,7 @@ fn polars_bam_mods(
     let df =
         curr_reads_to_dataframe(df_collection.as_slice()).map_err(|e: Error| py_exception!(e))?;
 
-    // return output
+    // Returning an empty DataFrame is valid; callers may legitimately receive zero rows.
     Ok(PyDataFrame(df))
 }
 

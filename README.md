@@ -151,6 +151,7 @@ print(json.dumps(decoded_output, indent=2))
   {
     "read_id": "5d10eb9a-aae1-4db8-8ec6-7ebb34d32575",
     "sequence_length": 8,
+    "mapq": 255,
     "contig": "dummyI",
     "reference_start": 9,
     "reference_end": 17,
@@ -161,6 +162,7 @@ print(json.dumps(decoded_output, indent=2))
   {
     "read_id": "a4f36092-b4d5-47a9-813e-c22c3b477a0c",
     "sequence_length": 48,
+    "mapq": 255,
     "contig": "dummyIII",
     "reference_start": 23,
     "reference_end": 71,
@@ -171,6 +173,7 @@ print(json.dumps(decoded_output, indent=2))
   {
     "read_id": "fffffff1-10d2-49cb-8ca3-e8d48979001b",
     "sequence_length": 33,
+    "mapq": 255,
     "contig": "dummyII",
     "reference_start": 3,
     "reference_end": 36,
@@ -181,12 +184,17 @@ print(json.dumps(decoded_output, indent=2))
   {
     "read_id": "a4f36092-b4d5-47a9-813e-c22c3b477a0c",
     "sequence_length": 48,
+    "mapq": 0,
     "alignment_type": "unmapped",
     "mod_count": "G-7200:0;T+T:3;(probabilities >= 0.5020, PHRED base qual >= 0)"
   }
 ]
 ```
 <!-- TEST OUTPUT: END read_info -->
+
+Here, `mapq` follows SAM/BAM conventions: `255` means mapping quality is unavailable,
+while `0` is a valid mapping quality value and is commonly seen on unmapped reads.
+This is the same field used by `mapq_filter` and `exclude_mapq_unavail`.
 
 ## Window reads
 
@@ -405,38 +413,41 @@ print(df.write_csv(separator='\t'), end='')
 <!-- TEST CODE: END polars_bam_mods -->
 
 The output is a polars dataframe printed as TSV.
+The `mapq` column follows SAM/BAM conventions: `255` means mapping quality is unavailable,
+while `0` is a valid mapping quality value. This is the same field used by
+`mapq_filter` and `exclude_mapq_unavail`.
 Mod quality is a probability represented as a number between 0 and 255,
 where 0 means not modified and 255 means modified with certainty.
 This is how modification data is stored in the mod BAM format.
 
 <!-- TEST OUTPUT: START polars_bam_mods -->
 ```text
-read_id	seq_len	alignment_type	align_start	align_end	contig	contig_id	base	is_strand_plus	mod_code	position	ref_position	mod_quality
-5d10eb9a-aae1-4db8-8ec6-7ebb34d32575	8	primary_forward	9	17	dummyI	0	T	true	T	0	9	4
-5d10eb9a-aae1-4db8-8ec6-7ebb34d32575	8	primary_forward	9	17	dummyI	0	T	true	T	3	12	7
-5d10eb9a-aae1-4db8-8ec6-7ebb34d32575	8	primary_forward	9	17	dummyI	0	T	true	T	4	13	9
-5d10eb9a-aae1-4db8-8ec6-7ebb34d32575	8	primary_forward	9	17	dummyI	0	T	true	T	7	16	6
-a4f36092-b4d5-47a9-813e-c22c3b477a0c	48	primary_forward	23	71	dummyIII	2	T	true	T	3	26	221
-a4f36092-b4d5-47a9-813e-c22c3b477a0c	48	primary_forward	23	71	dummyIII	2	T	true	T	8	31	242
-a4f36092-b4d5-47a9-813e-c22c3b477a0c	48	primary_forward	23	71	dummyIII	2	T	true	T	27	50	3
-a4f36092-b4d5-47a9-813e-c22c3b477a0c	48	primary_forward	23	71	dummyIII	2	T	true	T	39	62	47
-a4f36092-b4d5-47a9-813e-c22c3b477a0c	48	primary_forward	23	71	dummyIII	2	T	true	T	47	70	239
-fffffff1-10d2-49cb-8ca3-e8d48979001b	33	primary_reverse	3	36	dummyII	1	T	true	T	12	15	3
-fffffff1-10d2-49cb-8ca3-e8d48979001b	33	primary_reverse	3	36	dummyII	1	T	true	T	13	16	3
-fffffff1-10d2-49cb-8ca3-e8d48979001b	33	primary_reverse	3	36	dummyII	1	T	true	T	16	19	4
-fffffff1-10d2-49cb-8ca3-e8d48979001b	33	primary_reverse	3	36	dummyII	1	T	true	T	19	22	3
-fffffff1-10d2-49cb-8ca3-e8d48979001b	33	primary_reverse	3	36	dummyII	1	T	true	T	20	23	182
-a4f36092-b4d5-47a9-813e-c22c3b477a0c	48	unmapped					G	false	7200	28	-1	0
-a4f36092-b4d5-47a9-813e-c22c3b477a0c	48	unmapped					G	false	7200	29	-1	0
-a4f36092-b4d5-47a9-813e-c22c3b477a0c	48	unmapped					G	false	7200	30	-1	0
-a4f36092-b4d5-47a9-813e-c22c3b477a0c	48	unmapped					G	false	7200	32	-1	0
-a4f36092-b4d5-47a9-813e-c22c3b477a0c	48	unmapped					G	false	7200	43	-1	77
-a4f36092-b4d5-47a9-813e-c22c3b477a0c	48	unmapped					G	false	7200	44	-1	0
-a4f36092-b4d5-47a9-813e-c22c3b477a0c	48	unmapped					T	true	T	3	-1	221
-a4f36092-b4d5-47a9-813e-c22c3b477a0c	48	unmapped					T	true	T	8	-1	242
-a4f36092-b4d5-47a9-813e-c22c3b477a0c	48	unmapped					T	true	T	27	-1	0
-a4f36092-b4d5-47a9-813e-c22c3b477a0c	48	unmapped					T	true	T	39	-1	47
-a4f36092-b4d5-47a9-813e-c22c3b477a0c	48	unmapped					T	true	T	47	-1	239
+read_id	seq_len	mapq	alignment_type	align_start	align_end	contig	contig_id	base	is_strand_plus	mod_code	position	ref_position	mod_quality
+5d10eb9a-aae1-4db8-8ec6-7ebb34d32575	8	255	primary_forward	9	17	dummyI	0	T	true	T	0	9	4
+5d10eb9a-aae1-4db8-8ec6-7ebb34d32575	8	255	primary_forward	9	17	dummyI	0	T	true	T	3	12	7
+5d10eb9a-aae1-4db8-8ec6-7ebb34d32575	8	255	primary_forward	9	17	dummyI	0	T	true	T	4	13	9
+5d10eb9a-aae1-4db8-8ec6-7ebb34d32575	8	255	primary_forward	9	17	dummyI	0	T	true	T	7	16	6
+a4f36092-b4d5-47a9-813e-c22c3b477a0c	48	255	primary_forward	23	71	dummyIII	2	T	true	T	3	26	221
+a4f36092-b4d5-47a9-813e-c22c3b477a0c	48	255	primary_forward	23	71	dummyIII	2	T	true	T	8	31	242
+a4f36092-b4d5-47a9-813e-c22c3b477a0c	48	255	primary_forward	23	71	dummyIII	2	T	true	T	27	50	3
+a4f36092-b4d5-47a9-813e-c22c3b477a0c	48	255	primary_forward	23	71	dummyIII	2	T	true	T	39	62	47
+a4f36092-b4d5-47a9-813e-c22c3b477a0c	48	255	primary_forward	23	71	dummyIII	2	T	true	T	47	70	239
+fffffff1-10d2-49cb-8ca3-e8d48979001b	33	255	primary_reverse	3	36	dummyII	1	T	true	T	12	15	3
+fffffff1-10d2-49cb-8ca3-e8d48979001b	33	255	primary_reverse	3	36	dummyII	1	T	true	T	13	16	3
+fffffff1-10d2-49cb-8ca3-e8d48979001b	33	255	primary_reverse	3	36	dummyII	1	T	true	T	16	19	4
+fffffff1-10d2-49cb-8ca3-e8d48979001b	33	255	primary_reverse	3	36	dummyII	1	T	true	T	19	22	3
+fffffff1-10d2-49cb-8ca3-e8d48979001b	33	255	primary_reverse	3	36	dummyII	1	T	true	T	20	23	182
+a4f36092-b4d5-47a9-813e-c22c3b477a0c	48	0	unmapped					G	false	7200	28	-1	0
+a4f36092-b4d5-47a9-813e-c22c3b477a0c	48	0	unmapped					G	false	7200	29	-1	0
+a4f36092-b4d5-47a9-813e-c22c3b477a0c	48	0	unmapped					G	false	7200	30	-1	0
+a4f36092-b4d5-47a9-813e-c22c3b477a0c	48	0	unmapped					G	false	7200	32	-1	0
+a4f36092-b4d5-47a9-813e-c22c3b477a0c	48	0	unmapped					G	false	7200	43	-1	77
+a4f36092-b4d5-47a9-813e-c22c3b477a0c	48	0	unmapped					G	false	7200	44	-1	0
+a4f36092-b4d5-47a9-813e-c22c3b477a0c	48	0	unmapped					T	true	T	3	-1	221
+a4f36092-b4d5-47a9-813e-c22c3b477a0c	48	0	unmapped					T	true	T	8	-1	242
+a4f36092-b4d5-47a9-813e-c22c3b477a0c	48	0	unmapped					T	true	T	27	-1	0
+a4f36092-b4d5-47a9-813e-c22c3b477a0c	48	0	unmapped					T	true	T	39	-1	47
+a4f36092-b4d5-47a9-813e-c22c3b477a0c	48	0	unmapped					T	true	T	47	-1	239
 ```
 <!-- TEST OUTPUT: END polars_bam_mods -->
 

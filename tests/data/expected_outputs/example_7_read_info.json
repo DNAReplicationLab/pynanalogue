@@ -2,6 +2,7 @@
 {
 	"read_id": "read1",
 	"sequence_length": 7,
+	"mapq": 255,
 	"contig": "dummyI",
 	"reference_start": 9,
 	"reference_end": 17,

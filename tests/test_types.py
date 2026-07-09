@@ -125,6 +125,7 @@ class TestDataFrameSchema:
         expected_columns = {
             "read_id",
             "seq_len",
+            "mapq",
             "alignment_type",
             "align_start",
             "align_end",
@@ -142,6 +143,7 @@ class TestDataFrameSchema:
         # Verify some expected types
         assert df["read_id"].dtype == pl.Utf8 or df["read_id"].dtype == pl.String
         assert df["seq_len"].dtype in [pl.Int64, pl.UInt64, pl.Int32, pl.UInt32]
+        assert df["mapq"].dtype in [pl.UInt8, pl.UInt32, pl.Int64, pl.UInt64]
         assert df["position"].dtype in [pl.Int64, pl.UInt64, pl.Int32, pl.UInt32]
         assert df["mod_quality"].dtype in [pl.UInt8, pl.UInt32, pl.Int64, pl.UInt64]
 
@@ -187,13 +189,14 @@ class TestJSONOutput:
         if decoded:
             # Check first record has expected fields
             first_record = decoded[0]
-            required_fields = ["read_id", "sequence_length"]
+            required_fields = ["read_id", "sequence_length", "mapq"]
             for field in required_fields:
                 assert field in first_record, f"Expected field '{field}' not found"
 
             # Verify types
             assert isinstance(first_record["read_id"], str)
             assert isinstance(first_record["sequence_length"], int)
+            assert isinstance(first_record["mapq"], int)
 
 
 class TestDefaultParameters:
