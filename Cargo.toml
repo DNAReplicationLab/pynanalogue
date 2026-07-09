@@ -115,3 +115,10 @@ strip = true           # Remove debug symbols
 # Development profile for faster iteration
 [profile.dev]
 opt-level = 0          # No optimization for faster compilation
+debug = false
+
+[profile.dev.package."*"]
+debug = false
+
+[profile.test]
+inherits = "dev"
