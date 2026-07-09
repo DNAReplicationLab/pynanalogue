@@ -124,10 +124,24 @@ jobs:
             zlib-static \
             curl-dev \
             openssl-dev \
-            build-base
+            build-base \
+            clang \
+            llvm \
+            llvm-dev \
+            libclang \
+            libclang-dev \
+            perl
 
       - name: Set environment variables
-        run: echo "CFLAGS=-I/usr/include" >> $GITHUB_ENV
+        run: |
+          echo "CFLAGS=-I/usr/include" >> $GITHUB_ENV
+          echo "CLANG_PATH=$(command -v clang)" >> $GITHUB_ENV
+          libclang_path="$(find /usr -name 'libclang.so*' -o -name 'libclang-*.so*' | head -n1)"
+          if [ -z "$libclang_path" ]; then
+            echo "Could not locate libclang shared library" >&2
+            exit 1
+          fi
+          echo "LIBCLANG_PATH=$(dirname "$libclang_path")" >> $GITHUB_ENV
 
       - name: Install maturin and Python dependencies
         run: |
