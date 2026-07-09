@@ -125,11 +125,10 @@ jobs:
             curl-dev \
             openssl-dev \
             build-base \
-            clang \
+            clang21 \
             llvm \
             llvm-dev \
-            libclang \
-            libclang-dev \
+            clang21-dev \
             perl
 
       - name: Set environment variables
