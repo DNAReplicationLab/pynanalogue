@@ -1,5 +1,12 @@
 name: Rust CI
 
+permissions:
+  contents: read
+
+concurrency:
+  group: rust-ci-no-cargo-lock-${{ github.ref }}
+  cancel-in-progress: true
+
 # We run CI after removing Cargo.lock to check if everything
 # works without the lock file. If something breaks without the
 # lock file i.e. due to newer packages, it's not a deal breaker,
@@ -25,10 +32,14 @@ jobs:
 
     steps:
       - name: Checkout code
-        uses: actions/checkout@v6
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.1.0
+        with:
+          persist-credentials: false
 
       - name: Setup Rust toolchain
-        run: rustup update ${{ matrix.toolchain }} && rustup default ${{ matrix.toolchain }}
+        env:
+          TOOLCHAIN: ${{ matrix.toolchain }}
+        run: rustup update "$TOOLCHAIN" && rustup default "$TOOLCHAIN"
 
       - name: remove cargo.lock
         run: rm Cargo.lock

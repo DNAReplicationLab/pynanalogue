@@ -1,0 +1,44 @@
+# Check the committed dependency graph, including newly published advisories.
+# Keep advisory exceptions explicit and specific to this Python extension.
+name: Dependency security
+
+permissions:
+  contents: read
+
+concurrency:
+  group: dependency-security-${{ github.ref }}
+  cancel-in-progress: true
+
+on:
+  push:
+    branches: [ "main" ]
+  pull_request:
+    branches: [ "main" ]
+  schedule:
+    - cron: "0 6 * * 0"
+  workflow_dispatch:
+
+jobs:
+  dependency_security:
+    name: Audit advisories and dependency policy
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.1.0
+        with:
+          persist-credentials: false
+
+      - name: Set up Rust
+        run: rustup update stable && rustup default stable
+
+      - name: Install security tools
+        run: |
+          cargo install cargo-audit --version '=0.22.2' --locked
+          cargo install cargo-deny --version '=0.20.2' --locked
+
+      - name: Audit the lockfile
+        run: cargo audit
+
+      - name: Check advisories, bans, and sources
+        if: ${{ !cancelled() }}
+        run: cargo deny --locked check advisories bans sources

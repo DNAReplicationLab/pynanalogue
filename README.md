@@ -5,7 +5,7 @@ PyNanalogue = *Py*thon *N*ucleic Acid *Analogue*.
 Nanalogue is a tool to parse or analyse BAM/Mod BAM files with a single-molecule focus.
 We expose some of Nanalogue's functions through a python interface here.
 
-[![Python Tests (3.9-3.14 Ubuntu & Mac), Benchmark, Linting](https://github.com/DNAReplicationLab/pynanalogue/actions/workflows/python-tests.yml/badge.svg)](https://github.com/DNAReplicationLab/pynanalogue/actions/workflows/python-tests.yml)
+[![Python Tests (3.11-3.15 Ubuntu & Mac), Benchmark, Linting](https://github.com/DNAReplicationLab/pynanalogue/actions/workflows/python-tests.yml/badge.svg)](https://github.com/DNAReplicationLab/pynanalogue/actions/workflows/python-tests.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
 A common pain point in genomics analyses is that BAM files are information-dense
@@ -53,7 +53,7 @@ But the table of contents is correct.
 
 # Requirements
 
-- Python 3.9 or higher
+- Python 3.11 or higher
 - Rust toolchain (for building from source)
 
 # Installation

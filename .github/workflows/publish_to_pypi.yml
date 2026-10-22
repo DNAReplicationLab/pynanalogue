@@ -1,5 +1,15 @@
 name: Build Wheels and Publish to PyPI
 
+permissions:
+  contents: read
+
+concurrency:
+  group: pypi-publish
+  # Retain up to 100 pending releases instead of replacing the pending run.
+  queue: max
+  # Finish an active release instead of interrupting publication.
+  cancel-in-progress: false
+
 on:
   release:
     types: [published]
@@ -10,7 +20,9 @@ jobs:
     name: Verify version matches release tag
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.1.0
+        with:
+          persist-credentials: false
       - name: Install yq
         run: sudo snap install yq
       - name: Check versions match tag
@@ -37,21 +49,23 @@ jobs:
 
     steps:
       - name: Checkout code
-        uses: actions/checkout@v6
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.1.0
+        with:
+          persist-credentials: false
 
       - name: Set up Python
-        uses: actions/setup-python@v6
+        uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6.3.0
         with:
           python-version: "3.11"
 
       - name: Build wheels
-        uses: PyO3/maturin-action@v1
+        uses: PyO3/maturin-action@e83996d129638aa358a18fbd1dfb82f0b0fb5d3b # v1.51.0
         with:
           command: build
-          args: --release --out dist --interpreter python3.9 --interpreter python3.10 --interpreter python3.11 --interpreter python3.12 --interpreter python3.13 --interpreter python3.14
+          args: --locked --release --out dist --interpreter python3.11 --interpreter python3.12 --interpreter python3.13 --interpreter python3.14 --interpreter python3.15
 
       - name: Upload wheels
-        uses: actions/upload-artifact@v6
+        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6.0.0
         with:
           name: wheels-${{ matrix.os }}
           path: dist/*.whl
@@ -64,61 +78,70 @@ jobs:
       matrix:
         include:
           # x86_64 builds
-          - container: quay.io/pypa/musllinux_1_2_x86_64
+          - container: quay.io/pypa/musllinux_1_2_x86_64@sha256:773cb7e73652e4596eba6a9d593b01278f86772641d6530a6660422d30e50f36
             runner: ubuntu-latest
-          - container: quay.io/pypa/manylinux_2_28_x86_64
+          - container: quay.io/pypa/manylinux_2_28_x86_64@sha256:076b19ef6e698f28649fa817c49d14443201e01da85240e8e52f93e8daa49bff
             runner: ubuntu-latest
-          - container: quay.io/pypa/manylinux_2_34_x86_64
+          - container: quay.io/pypa/manylinux_2_34_x86_64@sha256:c8f6ffd1ef263c484621fe6a1b8ec9e8166c6ff7dd1a8232a0476893a71148c1
             runner: ubuntu-latest
-          - container: quay.io/pypa/manylinux2014_x86_64
+          - container: quay.io/pypa/manylinux2014_x86_64@sha256:3a591c1109773dbd79f16c038588fd1867d9f2f708b360dab5715852c7f96ef0
             runner: ubuntu-latest
           # ARM64 builds
-          - container: quay.io/pypa/musllinux_1_2_aarch64
+          - container: quay.io/pypa/musllinux_1_2_aarch64@sha256:98f93110a91c028291c902e55619154c5522c57ccecef1f9eedcc2f1177aad12
             runner: ubuntu-24.04-arm
-          - container: quay.io/pypa/manylinux_2_28_aarch64
+          - container: quay.io/pypa/manylinux_2_28_aarch64@sha256:270a5e59af09f02dfc07fe4bb2cb2c5625c76d085cfa47f87dd93d9026eacc75
             runner: ubuntu-24.04-arm
-          - container: quay.io/pypa/manylinux_2_34_aarch64
+          - container: quay.io/pypa/manylinux_2_34_aarch64@sha256:37ece406900cbbbf309e84634b8508ee5f474cf883bb8c4754f02537fe69f35b
             runner: ubuntu-24.04-arm
-          - container: quay.io/pypa/manylinux2014_aarch64
+          - container: quay.io/pypa/manylinux2014_aarch64@sha256:00260f8334f8358554592c35d33f1b6daa064a3c95725328624b4823dc07bf81
             runner: ubuntu-24.04-arm
 
     steps:
       - name: Checkout code
-        uses: actions/checkout@v6
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.1.0
+        with:
+          persist-credentials: false
 
       - name: Determine compatibility tag
         id: compat
+        env:
+          CONTAINER_IMAGE: ${{ matrix.container }}
         run: |
           # Determine architecture
-          if [[ "${{ matrix.container }}" == *"aarch64"* ]]; then
+          if [[ "$CONTAINER_IMAGE" == *"aarch64"* ]]; then
             ARCH="aarch64"
           else
             ARCH="x86_64"
           fi
 
           # Determine base tag
-          if [[ "${{ matrix.container }}" == *"musllinux_1_2"* ]]; then
+          if [[ "$CONTAINER_IMAGE" == *"musllinux_1_2"* ]]; then
             BASE_TAG="musllinux_1_2"
-          elif [[ "${{ matrix.container }}" == *"manylinux_2_28"* ]]; then
+          elif [[ "$CONTAINER_IMAGE" == *"manylinux_2_28"* ]]; then
             BASE_TAG="manylinux_2_28"
-          elif [[ "${{ matrix.container }}" == *"manylinux_2_34"* ]]; then
+          elif [[ "$CONTAINER_IMAGE" == *"manylinux_2_34"* ]]; then
             BASE_TAG="manylinux_2_34"
-          elif [[ "${{ matrix.container }}" == *"manylinux2014"* ]]; then
+          elif [[ "$CONTAINER_IMAGE" == *"manylinux2014"* ]]; then
             BASE_TAG="manylinux2014"
           else
-            echo "ERROR: Unrecognized container: ${{ matrix.container }}"
+            echo "ERROR: Unrecognized container: $CONTAINER_IMAGE"
             exit 1
           fi
 
-          echo "tag=${BASE_TAG}_${ARCH}" >> $GITHUB_OUTPUT
-          echo "base_tag=${BASE_TAG}" >> $GITHUB_OUTPUT
+          echo "tag=${BASE_TAG}_${ARCH}" >> "$GITHUB_OUTPUT"
+          echo "base_tag=${BASE_TAG}" >> "$GITHUB_OUTPUT"
 
       - name: Build wheels in container
+        env:
+          CONTAINER_IMAGE: ${{ matrix.container }}
+          COMPATIBILITY: ${{ steps.compat.outputs.base_tag }}
         run: |
           docker run --rm \
-            -v ${{ github.workspace }}:/workspace \
+            -v "$GITHUB_WORKSPACE:/workspace" \
             -w /workspace \
-            ${{ matrix.container }} \
+            -e CONTAINER_IMAGE \
+            -e COMPATIBILITY \
+            "$CONTAINER_IMAGE" \
             bash -c '
               set -euo pipefail
               trap '\''echo "ERROR: Build failed at line $LINENO"; exit 1'\'' ERR
@@ -135,7 +158,7 @@ jobs:
               cd /workspace
 
               # Install dependencies based on container type
-              if [[ "${{ matrix.container }}" == *"musllinux"* ]]; then
+              if [[ "$CONTAINER_IMAGE" == *"musllinux"* ]]; then
                 apk add --no-cache \
                   bzip2-dev \
                   xz-dev \
@@ -155,15 +178,15 @@ jobs:
               fi
 
               # Build wheels
-              /opt/python/cp311-cp311/bin/maturin build --release \
+              /opt/python/cp311-cp311/bin/maturin build --locked --release \
                 --out dist \
-                --interpreter python3.9 --interpreter python3.10 --interpreter python3.11 --interpreter python3.12 --interpreter python3.13 --interpreter python3.14 \
-                --compatibility ${{ steps.compat.outputs.base_tag }} \
+                --interpreter python3.11 --interpreter python3.12 --interpreter python3.13 --interpreter python3.14 --interpreter python3.15 \
+                --compatibility "$COMPATIBILITY" \
                 --zig
             '
 
       - name: Upload wheels
-        uses: actions/upload-artifact@v6
+        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6.0.0
         with:
           name: wheels-${{ steps.compat.outputs.tag }}
           path: ${{ github.workspace }}/dist/*.whl
@@ -174,16 +197,18 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout code
-        uses: actions/checkout@v6
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.1.0
+        with:
+          persist-credentials: false
 
       - name: Build sdist
-        uses: PyO3/maturin-action@v1
+        uses: PyO3/maturin-action@e83996d129638aa358a18fbd1dfb82f0b0fb5d3b # v1.51.0
         with:
           command: sdist
           args: --out dist
 
       - name: Upload sdist
-        uses: actions/upload-artifact@v6
+        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6.0.0
         with:
           name: sdist
           path: dist/*.tar.gz
@@ -194,10 +219,10 @@ jobs:
     needs: [build_macos_wheels, build_linux_wheels, build_sdist]
     environment: environment_pypi
     permissions:
-      id-token: write
+      id-token: write # Authenticate to PyPI using OIDC trusted publishing.
     steps:
       - name: Download all artifacts
-        uses: actions/download-artifact@v6
+        uses: actions/download-artifact@018cc2cf5baa6db3ef3c5f8a56943fffe632ef53 # v6.0.0
         with:
           path: dist
           merge-multiple: true
@@ -206,6 +231,6 @@ jobs:
         run: ls -la dist/
 
       - name: Publish to PyPI
-        uses: pypa/gh-action-pypi-publish@release/v1
+        uses: pypa/gh-action-pypi-publish@7245906fb61fa33a13554f9d5fb856fe61758086 # v1.14.3
         with:
           packages-dir: dist/

@@ -10,6 +10,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
 - Mapping quality (`mapq`) in `read_info()` JSON output and `polars_bam_mods()` DataFrames, with updated documentation and examples
 - Regression tests for numeric input limits, MAPQ filtering, exact output schemas (including empty results), and propagation of analysis errors
+- Dependency-security CI on pull requests, main-branch pushes, weekly schedules, and manual runs using pinned cargo-audit and cargo-deny versions (advisories, bans, and sources; no license policy or advisory exceptions)
 
 ### Changed
 - Updated nanalogue from 0.1.7 through 0.1.11 to an exact 0.2.0 dependency with its `polars` feature enabled, and refreshed Cargo.lock
@@ -18,6 +19,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Limited `min_seq_len`, `min_align_len`, `win`, and `step` to at most 4294967295 (u32::MAX); larger values now raise `ValueError`
 - Aligned MAPQ filtering with nanalogue 0.2.0: MAPQ 0 is subject to the numeric threshold, while MAPQ 255 denotes unavailable quality and is excluded only when `exclude_mapq_unavail` is enabled
 - Disabled debug symbols for development builds and their dependencies, and made the test profile inherit the development profile
+- Pinned GitHub Actions to full commit hashes, restricted workflow token permissions, and disabled checkout credential persistence
+- Enforced Cargo.lock for normal Rust checks and maturin compilation in tests, benchmarks, and wheel builds; retained the separate fresh-dependency Rust workflow
+- Added a seven-day cooldown for Dependabot version updates across Cargo, Python, and GitHub Actions
+- Raised the minimum Python version to 3.11, updated the stable ABI baseline to Python 3.11, and moved CI and wheel-build interpreter coverage to Python 3.11–3.15
+- Hardened CI shell interpolation, pinned Linux container images by digest, documented publishing permissions, replaced redundant Rust setup actions, and limited concurrent runs while preserving active publications
 
 ### Fixed
 - Return typed, zero-row DataFrames from `window_reads()` and `seq_table()` when filtering leaves no records, or windowing yields no rows; unrelated processing errors still propagate

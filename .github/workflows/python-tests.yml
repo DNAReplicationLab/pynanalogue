@@ -1,4 +1,11 @@
-name: Python Tests (3.9-3.14 Ubuntu & Mac), Benchmarks, Linting
+name: Python Tests (3.11-3.15 Ubuntu & Mac), Benchmarks, Linting
+
+permissions:
+  contents: read
+
+concurrency:
+  group: python-tests-${{ github.ref }}
+  cancel-in-progress: true
 
 on:
   push:
@@ -14,19 +21,21 @@ jobs:
       fail-fast: false
       matrix:
         os: [ubuntu-latest, macos-latest]
-        python-version: ["3.9", "3.10", "3.11", "3.12", "3.13", "3.14"]
+        python-version: ["3.11", "3.12", "3.13", "3.14", "3.15"]
 
     steps:
       - name: Checkout code
-        uses: actions/checkout@v6
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.1.0
+        with:
+          persist-credentials: false
 
       - name: Set up Python ${{ matrix.python-version }}
-        uses: actions/setup-python@v6
+        uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6.3.0
         with:
           python-version: ${{ matrix.python-version }}
 
       - name: Set up Rust
-        uses: dtolnay/rust-toolchain@stable
+        run: rustup update stable && rustup default stable
 
       - name: Install maturin
         run: pip install maturin
@@ -41,14 +50,14 @@ jobs:
         run: pip install pytest pytest-cov pytest-benchmark
 
       - name: Build package in release mode
-        run: maturin develop --release
+        run: maturin develop --locked --release
 
       - name: Run tests with coverage
         run: pytest tests/ -v --cov=pynanalogue --cov-report=xml --cov-report=term
 
       - name: (disable for now) Upload coverage to Codecov
         if: false && matrix.os == 'ubuntu-latest' && matrix.python-version == '3.11'
-        uses: codecov/codecov-action@v5
+        uses: codecov/codecov-action@0fb7174895f61a3b6b78fc075e0cd60383518dac # v5.5.5
         with:
           file: ./coverage.xml
           flags: unittests
@@ -60,15 +69,17 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout code
-        uses: actions/checkout@v6
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.1.0
+        with:
+          persist-credentials: false
 
       - name: Set up Python 3.11
-        uses: actions/setup-python@v6
+        uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6.3.0
         with:
           python-version: "3.11"
 
       - name: Set up Rust
-        uses: dtolnay/rust-toolchain@stable
+        run: rustup update stable && rustup default stable
 
       - name: Install maturin
         run: pip install maturin
@@ -83,17 +94,17 @@ jobs:
         run: pip install pytest pytest-benchmark
 
       - name: Build package in release mode
-        run: maturin develop --release
+        run: maturin develop --locked --release
 
       - name: Create benchmark storage directory
-        run: mkdir -p ${{ github.workspace }}/benchmarks
+        run: mkdir -p "$GITHUB_WORKSPACE/benchmarks"
 
       - name: Run benchmarks
-        run: pytest tests/ --benchmark-only --benchmark-autosave --benchmark-storage=${{ github.workspace }}/benchmarks
+        run: pytest tests/ --benchmark-only --benchmark-autosave --benchmark-storage="$GITHUB_WORKSPACE/benchmarks"
 
       - name: Store benchmark results
         if: github.event_name == 'push' && github.ref == 'refs/heads/main'
-        uses: actions/upload-artifact@v6
+        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6.0.0
         with:
           name: benchmark-results-glibc
           path: ${{ github.workspace }}/benchmarks/*
@@ -104,10 +115,12 @@ jobs:
     name: Benchmarks (musl)
     runs-on: ubuntu-latest
     container:
-      image: quay.io/pypa/musllinux_1_2_x86_64
+      image: quay.io/pypa/musllinux_1_2_x86_64@sha256:773cb7e73652e4596eba6a9d593b01278f86772641d6530a6660422d30e50f36
     steps:
       - name: Checkout code
-        uses: actions/checkout@v6
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.1.0
+        with:
+          persist-credentials: false
 
       - name: Install Rust
         run: |
@@ -150,18 +163,18 @@ jobs:
       - name: Build package in release mode
         run: |
           . "$HOME/.cargo/env"
-          /opt/python/cp311-cp311/bin/maturin build --release
+          /opt/python/cp311-cp311/bin/maturin build --locked --release
           /opt/python/cp311-cp311/bin/python3 -m pip install target/wheels/*.whl
 
       - name: Create benchmark storage directory
-        run: mkdir -p ${{ github.workspace }}/benchmarks
+        run: mkdir -p "$GITHUB_WORKSPACE/benchmarks"
 
       - name: Run benchmarks
-        run: /opt/python/cp311-cp311/bin/pytest tests/ --benchmark-only --benchmark-autosave --benchmark-storage=${{ github.workspace }}/benchmarks
+        run: /opt/python/cp311-cp311/bin/pytest tests/ --benchmark-only --benchmark-autosave --benchmark-storage="$GITHUB_WORKSPACE/benchmarks"
 
       - name: Store benchmark results
         if: github.event_name == 'push' && github.ref == 'refs/heads/main'
-        uses: actions/upload-artifact@v6
+        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6.0.0
         with:
           name: benchmark-results-musl
           path: ${{ github.workspace }}/benchmarks/*
@@ -173,10 +186,12 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout code
-        uses: actions/checkout@v6
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.1.0
+        with:
+          persist-credentials: false
 
       - name: Set up Python 3.11
-        uses: actions/setup-python@v6
+        uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6.3.0
         with:
           python-version: "3.11"
 
