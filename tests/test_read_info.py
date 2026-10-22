@@ -63,6 +63,18 @@ def test_read_info_basic(simple_bam):
     assert isinstance(decoded, list)
 
 
+def test_simple_bam_properties(simple_bam):
+    """Check the simulated fixture's MAPQ assumptions, not a general SAM rule."""
+    records = json.loads(pynanalogue.read_info(str(simple_bam)))
+    unmapped = [read for read in records if read["alignment_type"] == "unmapped"]
+    mapped = [read for read in records if read["alignment_type"] != "unmapped"]
+
+    assert unmapped, "Fixture must include unmapped reads"
+    assert all(read["mapq"] == 0 for read in unmapped)
+    assert mapped, "Fixture must include mapped reads"
+    assert all(10 <= read["mapq"] <= 20 for read in mapped)
+
+
 def test_read_info_with_filters(simple_bam):
     """Test read_info with various filters"""
     # Test with min_seq_len filter

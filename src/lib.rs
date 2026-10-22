@@ -25,6 +25,7 @@ use nanalogue_core::{
     peek as rust_peek, read_info as rust_read_info, reads_table as rust_reads_table,
     simulate_mod_bam as rust_simulate_mod_bam, window_reads as rust_window_reads,
 };
+use polars::prelude::{DataFrame, DataType, Schema};
 use pyo3::prelude::*;
 use pyo3::types::{PyDict, PyList};
 use pyo3_polars::PyDataFrame;
@@ -105,28 +106,31 @@ fn parse_input_options(
     }
 
     let mut bam_builder = InputBamBuilder::default();
-    let _ = bam_builder
-        .bam_path({
-            if treat_as_url {
-                PathOrURLOrStdin::URL(
-                    Url::parse(bam_path).map_err(|e: ParseError| py_value_error!(e))?,
-                )
-            } else {
-                PathOrURLOrStdin::Path(bam_path.into())
-            }
-        })
-        .min_seq_len(min_seq_len)
-        .threads(
-            NonZeroU32::new(threads.into())
-                .ok_or(py_value_error!("threads must be a positive integer"))?,
-        )
-        .include_zero_len(include_zero_len)
-        .read_filter(read_filter.to_string())
-        .sample_fraction(F32Bw0and1::new(sample_fraction).map_err(|e| py_value_error!(e))?)
-        .mapq_filter(mapq_filter)
-        .exclude_mapq_unavail(exclude_mapq_unavail)
-        .region(region.into())
-        .full_region(full_region);
+    let _ =
+        bam_builder
+            .bam_path({
+                if treat_as_url {
+                    PathOrURLOrStdin::URL(
+                        Url::parse(bam_path).map_err(|e: ParseError| py_value_error!(e))?,
+                    )
+                } else {
+                    PathOrURLOrStdin::Path(bam_path.into())
+                }
+            })
+            .min_seq_len(u32::try_from(min_seq_len).map_err(|e| {
+                py_value_error!(format!("min_seq_len must be at most 4294967295: {e}"))
+            })?)
+            .threads(
+                NonZeroU32::new(threads.into())
+                    .ok_or(py_value_error!("threads must be a positive integer"))?,
+            )
+            .include_zero_len(include_zero_len)
+            .read_filter(read_filter.to_string())
+            .sample_fraction(F32Bw0and1::new(sample_fraction).map_err(|e| py_value_error!(e))?)
+            .mapq_filter(mapq_filter)
+            .exclude_mapq_unavail(exclude_mapq_unavail)
+            .region(region.into())
+            .full_region(full_region);
     // Validate and set min_align_len based on value
     match min_align_len {
         ..0 => {
@@ -137,7 +141,9 @@ fn parse_input_options(
         }
         0 => {} // Don't set if zero (default behavior)
         v => {
-            let _ = bam_builder.min_align_len(v);
+            let _ = bam_builder.min_align_len(u32::try_from(v).map_err(|e| {
+                py_value_error!(format!("min_align_len must be at most 4294967295: {e}"))
+            })?);
         }
     }
     let _: Option<&mut _> = (!read_ids.is_empty()).then(|| bam_builder.read_id_set(read_ids));
@@ -183,15 +189,11 @@ fn parse_input_options(
 /// Needs an associated BAM index.
 fn load_bam(bam: InputBam) -> PyResult<rust_htslib::bam::IndexedReader> {
     let reader = match (bam.region, bam.bam_path) {
-        (Some(v), PathOrURLOrStdin::Path(w)) => nanalogue_indexed_bam_reader(
-            &w,
-            (&v).try_into().map_err(|e: Error| py_value_error!(e))?,
-        ),
+        (Some(v), PathOrURLOrStdin::Path(w)) => nanalogue_indexed_bam_reader(&w, (&v).into()),
         (None, PathOrURLOrStdin::Path(w)) => nanalogue_indexed_bam_reader(&w, FetchDefinition::All),
-        (Some(v), PathOrURLOrStdin::URL(w)) => nanalogue_indexed_bam_reader_from_url(
-            &w,
-            (&v).try_into().map_err(|e: Error| py_value_error!(e))?,
-        ),
+        (Some(v), PathOrURLOrStdin::URL(w)) => {
+            nanalogue_indexed_bam_reader_from_url(&w, (&v).into())
+        }
         (None, PathOrURLOrStdin::URL(w)) => {
             nanalogue_indexed_bam_reader_from_url(&w, FetchDefinition::All)
         }
@@ -580,8 +582,14 @@ fn window_reads(
 
     // set up windowing options
     let win_options = InputWindowingBuilder::default()
-        .win(win)
-        .step(step)
+        .win(
+            u32::try_from(win)
+                .map_err(|e| py_value_error!(format!("win must be at most 4294967295: {e}")))?,
+        )
+        .step(
+            u32::try_from(step)
+                .map_err(|e| py_value_error!(format!("step must be at most 4294967295: {e}")))?,
+        )
         .build()
         .map_err(|e| py_value_error!(e))?;
 
@@ -591,14 +599,14 @@ fn window_reads(
     let bam_rc_records =
         BamRcRecords::new(&mut reader, &mut bam, &mut mods).map_err(|e| py_exception!(e))?;
 
-    let df = match win_op {
+    let window_result = match win_op {
         "density" => rust_window_reads::run_df(
             bam_rc_records
                 .rc_records
                 .filter(|r| r.as_ref().map_or(true, |v| v.pre_filt(&bam))),
             win_options,
             &mods,
-            |x| analysis::threshold_and_mean(x).map(Into::into),
+            |x| analysis::threshold_and_mean(x).map(|v| Some(v.into())),
         ),
         "grad_density" => rust_window_reads::run_df(
             bam_rc_records
@@ -606,13 +614,38 @@ fn window_reads(
                 .filter(|r| r.as_ref().map_or(true, |v| v.pre_filt(&bam))),
             win_options,
             &mods,
-            analysis::threshold_and_gradient,
+            |x| analysis::threshold_and_gradient(x).map(Some),
         ),
         _ => Err(Error::InvalidState(String::from(
             "win_op must be set to density or grad_density",
         ))),
-    }
-    .map_err(|e| py_exception!(e))?;
+    };
+    let df = match window_result {
+        Ok(df) => df,
+        Err(Error::InvalidState(message))
+            if message.starts_with("No records found as input for analysis.")
+                || message.starts_with("No windowed data found.") =>
+        {
+            DataFrame::full_null(
+                &Schema::from_iter([
+                    ("contig".into(), DataType::String),
+                    ("ref_win_start".into(), DataType::Int64),
+                    ("ref_win_end".into(), DataType::Int64),
+                    ("read_id".into(), DataType::String),
+                    ("win_val".into(), DataType::Float32),
+                    ("strand".into(), DataType::String),
+                    ("base".into(), DataType::String),
+                    ("mod_strand".into(), DataType::String),
+                    ("mod_type".into(), DataType::String),
+                    ("win_start".into(), DataType::UInt32),
+                    ("win_end".into(), DataType::UInt32),
+                    ("basecall_qual".into(), DataType::UInt32),
+                ]),
+                0,
+            )
+        }
+        Err(e) => return Err(py_exception!(e)),
+    };
 
     // return output
     Ok(PyDataFrame(df))
@@ -979,15 +1012,30 @@ fn seq_table(
     };
 
     // Call reads_table::run_df with seq_summ_path = ""
-    let full_df = rust_reads_table::run_df(
+    let table_result = rust_reads_table::run_df(
         bam_rc_records
             .rc_records
             .filter(|r| r.as_ref().map_or(true, |v| v.pre_filt(&bam))),
         Some(mods),
         seq_display,
         "", // seq_summ_path empty
-    )
-    .map_err(|e| py_exception!(e))?;
+    );
+    let full_df = match table_result {
+        Ok(df) => df,
+        Err(Error::InvalidState(message))
+            if message.starts_with("No records found as input for analysis.") =>
+        {
+            DataFrame::full_null(
+                &Schema::from_iter([
+                    ("read_id".into(), DataType::String),
+                    ("sequence".into(), DataType::String),
+                    ("qualities".into(), DataType::String),
+                ]),
+                0,
+            )
+        }
+        Err(e) => return Err(py_exception!(e)),
+    };
 
     // Select only the required columns: read_id, sequence, qualities
     let df = full_df

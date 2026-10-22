@@ -13,6 +13,22 @@ BAM_FORWARD = str(TEST_DIR / "example_pynanalogue_1.bam")
 BAM_FIRST_READ_REV = str(TEST_DIR / "example_pynanalogue_1_first_read_rev.bam")
 
 
+def test_seq_table_empty_preserves_schema():
+    """A valid region without fully spanning reads returns a typed empty table."""
+    bam = str(TEST_DIR / "example_1.bam")
+    full = pynanalogue.seq_table(bam, region="dummyI:9-17")
+    assert full.height > 0
+
+    df = pynanalogue.seq_table(bam, region="dummyI")
+    assert df.height == 0
+    assert list(df.schema.items()) == list(full.schema.items())
+    assert df.schema == {
+        "read_id": pl.String,
+        "sequence": pl.String,
+        "qualities": pl.String,
+    }
+
+
 @pytest.mark.parametrize(
     "bam_file,expected_0_seq,expected_1_seq",
     [

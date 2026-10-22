@@ -7,6 +7,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- Mapping quality (`mapq`) in `read_info()` JSON output and `polars_bam_mods()` DataFrames, with updated documentation and examples
+- Regression tests for numeric input limits, MAPQ filtering, exact output schemas (including empty results), and propagation of analysis errors
+
+### Changed
+- Updated nanalogue from 0.1.7 through 0.1.11 to an exact 0.2.0 dependency with its `polars` feature enabled, and refreshed Cargo.lock
+- Updated Rust dependencies: polars to 0.53, rust-htslib to 1.0.0, pyo3 to 0.27, and pyo3-polars to 0.26.0
+- Changed Polars output types from `UInt64` to `UInt32` for `window_reads()` columns `win_start` and `win_end`, and `polars_bam_mods()` columns `seq_len`, `align_start`, `align_end`, and `position`
+- Limited `min_seq_len`, `min_align_len`, `win`, and `step` to at most 4294967295 (u32::MAX); larger values now raise `ValueError`
+- Aligned MAPQ filtering with nanalogue 0.2.0: MAPQ 0 is subject to the numeric threshold, while MAPQ 255 denotes unavailable quality and is excluded only when `exclude_mapq_unavail` is enabled
+- Disabled debug symbols for development builds and their dependencies, and made the test profile inherit the development profile
+
+### Fixed
+- Return typed, zero-row DataFrames from `window_reads()` and `seq_table()` when filtering leaves no records, or windowing yields no rows; unrelated processing errors still propagate
+- Fixed musl benchmark CI builds by installing Alpine-compatible Clang 20 and its development libraries, LLVM, and Perl, and configuring Clang/libclang paths
+
 ## [0.1.7] - 2026-02-09
 
 ### Changed

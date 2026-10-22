@@ -92,16 +92,15 @@ class TestWindowReadsBamFiltering:
 
         result_all = pynanalogue.window_reads(**base.as_dict())
 
-        # Filter with very high mapq (our test data has mapq 10-20)
-        # Note: Unmapped reads don't have MAPQ, so they pass through
+        # Mapped reads in this fixture have MAPQ 10–20; unmapped reads have MAPQ 0.
+        # All therefore fail the MAPQ >= 100 filter.
         params_filtered = replace(base, mapq_filter=100)
         result_filtered = pynanalogue.window_reads(**params_filtered.as_dict())
 
         assert len(result_all) > 0
-        assert len(result_filtered) < len(result_all)
-        assert len(result_filtered) > 0  # Unmapped reads still present
+        assert len(result_filtered) == 0
 
-        # Now exclude reads without mapq and verify we get zero results
+        # Excluding unavailable MAPQ cannot restore records removed by the threshold.
         params_filtered_2 = replace(base, mapq_filter=100, exclude_mapq_unavail=True)
         result_filtered_2 = pynanalogue.window_reads(**params_filtered_2.as_dict())
 

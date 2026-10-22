@@ -44,6 +44,17 @@ class TestPythonTypeErrors:
                 sample_fraction="0.5",  # string instead of float
             )
 
+    @pytest.mark.parametrize(
+        "parameter", ["min_seq_len", "min_align_len", "win", "step"]
+    )
+    def test_numeric_params_exceed_u32(self, parameter):
+        """Reject values that cannot fit the core's u32 parameters without wrapping."""
+        params = {"win": 5, "step": 2, parameter: 2**32}
+        with pytest.raises(
+            ValueError, match=rf"{parameter} must be at most 4294967295"
+        ):
+            pynanalogue.window_reads("/some/path.bam", **params)
+
     def test_tuple_param_wrong_type(self):
         """Test that tuple parameters reject wrong types"""
         with pytest.raises(TypeError):

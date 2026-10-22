@@ -38,8 +38,8 @@ def _test_window_reads_against_expected(example_number):
         "base": pl.Utf8,
         "mod_strand": pl.Utf8,
         "mod_type": pl.Utf8,
-        "win_start": pl.UInt64,
-        "win_end": pl.UInt64,
+        "win_start": pl.UInt32,
+        "win_end": pl.UInt32,
         "basecall_qual": pl.UInt32,
     }
 
@@ -55,6 +55,8 @@ def _test_window_reads_against_expected(example_number):
 
     # Read as TSV with explicit schema
     expected_df = pl.read_csv(modified_content, separator="\t", schema=schema)
+
+    assert list(result_df.schema.items()) == list(expected_df.schema.items())
 
     # Compare DataFrames (sort both to ensure consistent ordering)
     result_sorted = result_df.sort(by=result_df.columns)
@@ -73,6 +75,32 @@ def test_example_1_bam_window_reads():
 def test_example_3_bam_window_reads():
     """Test window_reads on example_3.bam matches expected output"""
     _test_window_reads_against_expected(3)
+
+
+@pytest.mark.parametrize("params", [{"min_seq_len": 1000}, {"win": 1000}])
+def test_window_reads_empty_preserves_schema(params):
+    """No retained records or no windows still produces the complete typed schema."""
+    bam = Path(__file__).parent / "data" / "examples" / "example_1.bam"
+    full = pynanalogue.window_reads(str(bam), win=2, step=1)
+    assert full.height > 0
+
+    df = pynanalogue.window_reads(str(bam), **{"win": 2, "step": 1, **params})
+    assert df.height == 0
+    assert list(df.schema.items()) == list(full.schema.items())
+    assert df.schema == {
+        "contig": pl.String,
+        "ref_win_start": pl.Int64,
+        "ref_win_end": pl.Int64,
+        "read_id": pl.String,
+        "win_val": pl.Float32,
+        "strand": pl.String,
+        "base": pl.String,
+        "mod_strand": pl.String,
+        "mod_type": pl.String,
+        "win_start": pl.UInt32,
+        "win_end": pl.UInt32,
+        "basecall_qual": pl.UInt32,
+    }
 
 
 def test_example_7_bam_window_reads():
@@ -114,8 +142,8 @@ def _test_window_reads_gradient_against_expected(example_number, win, step):
         "base": pl.Utf8,
         "mod_strand": pl.Utf8,
         "mod_type": pl.Utf8,
-        "win_start": pl.UInt64,
-        "win_end": pl.UInt64,
+        "win_start": pl.UInt32,
+        "win_end": pl.UInt32,
         "basecall_qual": pl.UInt32,
     }
 
@@ -130,6 +158,8 @@ def _test_window_reads_gradient_against_expected(example_number, win, step):
 
     # Read as TSV with explicit schema
     expected_df = pl.read_csv(modified_content, separator="\t", schema=schema)
+
+    assert list(result_df.schema.items()) == list(expected_df.schema.items())
 
     # Compare DataFrames (sort both to ensure consistent ordering)
     result_sorted = result_df.sort(by=result_df.columns)
@@ -158,6 +188,13 @@ def test_example_11_bam_window_reads_gradient_win10_step1():
 def test_example_11_bam_window_reads_gradient_win20_step2():
     """Test window_reads gradient on example_11.bam with win=20, step=2"""
     _test_window_reads_gradient_against_expected(11, win=20, step=2)
+
+
+def test_window_reads_gradient_error_propagates():
+    """A core analysis error must not be converted into an empty DataFrame."""
+    bam = Path(__file__).parent / "data" / "examples" / "example_1.bam"
+    with pytest.raises(Exception, match="threshold and gradient needs > 1 data point"):
+        pynanalogue.window_reads(str(bam), win=1, step=1, win_op="grad_density")
 
 
 def test_window_reads_invalid_win_op_raises_error(simple_bam):

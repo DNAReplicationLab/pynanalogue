@@ -1,6 +1,7 @@
 # Testing filtering parameters for read_info function
 # Uses dataclass pattern for managing many-parameter test cases
 
+from collections import Counter
 from dataclasses import dataclass, field, replace
 from typing import Set
 import json
@@ -129,18 +130,17 @@ class TestInputBamFiltering:
 
         result_all = decode_read_info(pynanalogue.read_info(**base.as_dict()))
 
-        # Filter with very high mapq (our test data has mapq 10-20)
-        # Note: Unmapped reads don't have MAPQ, so they pass through
+        # Mapped reads in this fixture have MAPQ 10–20; unmapped reads have MAPQ 0.
+        # All therefore fail the MAPQ >= 100 filter.
         params_filtered = replace(base, mapq_filter=100)
         result_filtered = decode_read_info(
             pynanalogue.read_info(**params_filtered.as_dict())
         )
 
         assert len(result_all) > 0
-        assert len(result_filtered) < len(result_all)
-        assert len(result_filtered) > 0  # Unmapped reads still present
+        assert result_filtered == []
 
-        # Now exclude reads without mapq and verify we get zero results
+        # Excluding unavailable MAPQ cannot restore records removed by the threshold.
         params_filtered_2 = replace(base, mapq_filter=100, exclude_mapq_unavail=True)
         result_filtered_2 = decode_read_info(
             pynanalogue.read_info(**params_filtered_2.as_dict())
@@ -149,6 +149,55 @@ class TestInputBamFiltering:
         assert len(result_filtered_2) == 0, (
             "Expected no reads with mapq_filter=100 and exclude_mapq_unavail=True"
         )
+
+    def test_exclude_mapq_unavail_retains_available_reads(self, tmp_path):
+        """Check MAPQ counts before filtering, after thresholding, and after exclusion."""
+        config = {
+            "seed": 42,
+            "contigs": {"number": 1, "len_range": [10000, 10000]},
+            "reads": [
+                {
+                    "number": 10,
+                    "mapq_range": [mapq, mapq],
+                    "base_qual_range": [20, 30],
+                    "len_range": [0.5, 0.5],
+                    "insert_middle": "ATCG",
+                    "mods": [],
+                }
+                for mapq in (60, 255)
+            ],
+        }
+        bam_path = tmp_path / "mapq_availability.bam"
+        pynanalogue.simulate_mod_bam(
+            json.dumps(config), str(bam_path), str(tmp_path / "mapq_availability.fasta")
+        )
+
+        # Establish all three populations, including unmapped MAPQ 0 reads.
+        records = decode_read_info(pynanalogue.read_info(str(bam_path)))
+        baseline_counts = Counter(record["mapq"] for record in records)
+        assert set(baseline_counts) == {0, 60, 255}
+        assert baseline_counts[0] > 0
+        assert baseline_counts[255] > 0
+        assert baseline_counts[60] > 0
+
+        # MAPQ >= 10 removes the MAPQ 0 reads, preserving the 60 and 255 counts.
+        threshold_records = decode_read_info(
+            pynanalogue.read_info(str(bam_path), mapq_filter=10)
+        )
+        threshold_counts = Counter(record["mapq"] for record in threshold_records)
+        assert set(threshold_counts) == {60, 255}
+        assert threshold_counts[255] == baseline_counts[255]
+        assert threshold_counts[60] == baseline_counts[60]
+
+        # Excluding unavailable MAPQ removes only the MAPQ 255 population.
+        excluded_records = decode_read_info(
+            pynanalogue.read_info(
+                str(bam_path), mapq_filter=10, exclude_mapq_unavail=True
+            )
+        )
+        excluded_counts = Counter(record["mapq"] for record in excluded_records)
+        assert set(excluded_counts) == {60}
+        assert excluded_counts[60] == baseline_counts[60]
 
     @pytest.mark.parametrize(
         "sample_fraction,expected_fraction",

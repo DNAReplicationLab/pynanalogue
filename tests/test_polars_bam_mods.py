@@ -29,23 +29,25 @@ def _test_polars_bam_mods_against_expected(example_number):
     # Define the expected schema for polars_bam_mods output
     schema = {
         "read_id": pl.Utf8,
-        "seq_len": pl.UInt64,
+        "seq_len": pl.UInt32,
         "mapq": pl.UInt32,
         "alignment_type": pl.Utf8,
-        "align_start": pl.UInt64,
-        "align_end": pl.UInt64,
+        "align_start": pl.UInt32,
+        "align_end": pl.UInt32,
         "contig": pl.Utf8,
         "contig_id": pl.Int32,
         "base": pl.Utf8,
         "is_strand_plus": pl.Boolean,
         "mod_code": pl.Utf8,
-        "position": pl.UInt64,
+        "position": pl.UInt32,
         "ref_position": pl.Int64,
         "mod_quality": pl.UInt32,
     }
 
     # Read expected output as TSV with explicit schema
     expected_df = pl.read_csv(expected_path, separator="\t", schema=schema)
+
+    assert list(result_df.schema.items()) == list(expected_df.schema.items())
 
     # Compare DataFrames (works for both empty and non-empty DataFrames)
     assert result_df.equals(expected_df), (
@@ -103,10 +105,12 @@ def test_polars_bam_mods_filters(simple_bam):
 
     # Our sequences are all length 5 kb, so a 6 kb filter should not let any through.
     assert len(df_filtered_1) == 0 and len(df_all) > 0
+    assert list(df_filtered_1.schema.items()) == list(df_all.schema.items())
 
     # Mods are all on the basecalled strand, so we should get no information if we filter
     # to only allow the complement through
     assert len(df_filtered_2) == 0 and len(df_all) > 0
+    assert list(df_filtered_2.schema.items()) == list(df_all.schema.items())
 
 
 def test_polars_bam_mods_invalid_path():
