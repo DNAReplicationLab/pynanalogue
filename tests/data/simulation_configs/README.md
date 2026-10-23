@@ -2,6 +2,12 @@
 
 This directory contains JSON configuration files for generating test BAM files using `simulate_mod_bam()`.
 
+These configurations omit `seed`, so generated sequences and modification calls vary
+between runs. Fixed workload dimensions make benchmarks comparable, not identical.
+For repeatable simulated data with the same simulator version and configuration,
+add a top-level integer `seed` to the JSON. Mapping-quality ranges below apply to
+mapped reads; simulated unmapped reads have MAPQ 0.
+
 ## simple_bam.json
 
 **Purpose**: Basic test fixture for most test cases
@@ -11,8 +17,8 @@ This directory contains JSON configuration files for generating test BAM files u
 - **Reads**: 1,000 reads total
   - Mapping quality: 10-20
   - Base quality: 10-20
-  - Length: 50% of contig length (5,000 bp)
-  - Insert sequence: "ATCG" in the middle of each read
+  - Initial length: 50% of contig length (5,000 bp)
+  - Insert sequence: "ATCG" in the middle of each read, giving a final length of 5,004 bp
 - **Modifications**: Thymine (T) modifications
   - Base: T on plus strand
   - Modification code: T
@@ -27,15 +33,15 @@ This directory contains JSON configuration files for generating test BAM files u
 
 ## benchmark_bam.json
 
-**Purpose**: Performance benchmarking for reproducible speed testing
+**Purpose**: Performance benchmarking with fixed workload dimensions
 
 **Specifications**:
 - **Contigs**: 2 contigs, each 1,000,000 bp (1 Mbp) long
 - **Reads**: 5,000 reads total
   - Mapping quality: 10-20
   - Base quality: 10-20
-  - Length: 1% of contig length (10,000 bp)
-  - Insert sequence: "ATCG" in the middle of each read
+  - Initial length: 1% of contig length (10,000 bp)
+  - Insert sequence: "ATCG" in the middle of each read, giving a final length of 10,004 bp
 - **Modifications**: Thymine (T) modifications
   - Base: T on plus strand
   - Modification code: T
@@ -58,8 +64,8 @@ This directory contains JSON configuration files for generating test BAM files u
 - **Reads**: 100 reads total
   - Mapping quality: 20-30
   - Base quality: 20-30
-  - Length: 50% of contig length (5,000 bp)
-  - Insert sequence: "ATCG" in the middle of each read
+  - Initial length: 50% of contig length (5,000 bp)
+  - Insert sequence: "ATCG" in the middle of each read, giving a final length of 5,004 bp
 - **Modifications**: Two different modification types
   1. Thymine (T) modifications on minus strand
      - Base: T, Strand: minus

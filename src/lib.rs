@@ -222,6 +222,14 @@ fn load_bam(bam: InputBam) -> PyResult<rust_htslib::bam::IndexedReader> {
 /// length vs basecalled length. The arguments can be used to filter
 /// the BAM data (e.g. passing through a specific region etc.).
 ///
+/// Only False is supported for `include_zero_len`; True raises ValueError.
+/// Length filters accept 0-4294967295, and threads must be 1-255.
+/// Regions require start < end and explicit ends at most 4294967294;
+/// omit the end (e.g. "chr1:0-") for an open-ended region.
+/// Tags must be one ASCII letter or a decimal code with no leading zeros (except "0"),
+/// at most seven digits, and a valid Unicode scalar value.
+/// URLs must use HTTP, HTTPS, or FTP.
+///
 /// # Args
 /// bam_path (str): Path to the BAM file. Must be associated with a BAM index.
 /// treat_as_url (optional, bool): If True, treat `bam_path` as a URL, default False.
@@ -230,9 +238,8 @@ fn load_bam(bam: InputBam) -> PyResult<rust_htslib::bam::IndexedReader> {
 ///     value. Defaults to unused.
 /// read_ids (optional, set of str): Only retrieve these read ids, defaults to unused.
 /// threads (optional, int): Number of threads used in some aspects of program execution, defaults to 2.
-/// include_zero_len (optional, bool): Include sequences of zero length. WARNING: our program
-///     may crash if you do this. Defaults to False. Helps to check if sequences of zero length
-///     exist in our BAM file.
+/// include_zero_len (optional, bool): Only False is supported (the default).
+///     True raises ValueError; zero-length reads cannot be enabled through this API.
 /// read_filter (optional, str): Comma-separated sequence of one to many of the following
 ///     strings: primary_forward, primary_reverse, secondary_forward, secondary_reverse,
 ///     supplementary_forward, supplementary_reverse, unmapped. If specified, only reads
@@ -411,6 +418,14 @@ fn read_info(
 /// Sets various options through builder functions before running
 /// the function and capturing the output (see `Example Output`).
 ///
+/// Length filters accept 0-4294967295, and threads must be 1-255.
+/// Regions require start < end and explicit ends at most 4294967294;
+/// omit the end (e.g. "chr1:0-") for an open-ended region.
+/// Tags must be one ASCII letter or a decimal code with no leading zeros (except "0"),
+/// at most seven digits, and a valid Unicode scalar value.
+/// URLs must use HTTP, HTTPS, or FTP.
+/// Valid input with no matching output returns a typed empty DataFrame.
+///
 /// # Args
 /// bam_path (str): Path to the BAM file. Must be associated with a BAM index.
 /// win (int): Size of window in number of bases whose mod is being queried.
@@ -428,9 +443,8 @@ fn read_info(
 ///     value. Defaults to unused.
 /// read_ids (optional, set of str): Only retrieve these read ids, defaults to unused.
 /// threads (optional, int): Number of threads used in some aspects of program execution, defaults to 2.
-/// include_zero_len (optional, bool): Include sequences of zero length. WARNING: our program
-///     may crash if you do this. Defaults to False. Helps to check if sequences of zero length
-///     exist in our BAM file.
+/// include_zero_len (optional, bool): Only False is supported (the default).
+///     True raises ValueError; zero-length reads cannot be enabled through this API.
 /// read_filter (optional, str): Comma-separated sequence of one to many of the following
 ///     strings: primary_forward, primary_reverse, secondary_forward, secondary_reverse,
 ///     supplementary_forward, supplementary_reverse, unmapped. If specified, only reads
@@ -662,6 +676,14 @@ fn window_reads(
 /// the function and capturing the output.
 /// Parses records, collects them, and runs `nanalogue_core::read_utils::curr_reads_to_dataframe`.
 ///
+/// Length filters accept 0-4294967295, and threads must be 1-255.
+/// Regions require start < end and explicit ends at most 4294967294;
+/// omit the end (e.g. "chr1:0-") for an open-ended region.
+/// Tags must be one ASCII letter or a decimal code with no leading zeros (except "0"),
+/// at most seven digits, and a valid Unicode scalar value.
+/// URLs must use HTTP, HTTPS, or FTP.
+/// Valid input with no matching output returns a typed empty DataFrame.
+///
 /// # Args
 /// bam_path (str): Path to the BAM file. Must be associated with a BAM index.
 /// treat_as_url (optional, bool): If True, treat `bam_path` as a URL, default False.
@@ -670,9 +692,8 @@ fn window_reads(
 ///     value. Defaults to unused.
 /// read_ids (optional, set of str): Only retrieve these read ids, defaults to unused.
 /// threads (optional, int): Number of threads used in some aspects of program execution, defaults to 2.
-/// include_zero_len (optional, bool): Include sequences of zero length. WARNING: our program
-///     may crash if you do this. Defaults to False. Helps to check if sequences of zero length
-///     exist in our BAM file.
+/// include_zero_len (optional, bool): Only False is supported (the default).
+///     True raises ValueError; zero-length reads cannot be enabled through this API.
 /// read_filter (optional, str): Comma-separated sequence of one to many of the following
 ///     strings: primary_forward, primary_reverse, secondary_forward, secondary_reverse,
 ///     supplementary_forward, supplementary_reverse, unmapped. If specified, only reads
@@ -725,32 +746,32 @@ fn window_reads(
 /// If the polars dataframe were converted to a plain-text table, it might look like the following:
 ///
 /// ```text
-/// read_id	seq_len	alignment_type	align_start	align_end	contig	contig_id	base	is_strand_plus	mod_code	position	ref_position	mod_quality
-/// 5d10eb9a-aae1-4db8-8ec6-7ebb34d32575	8	primary_forward	9	17	dummyI	0	T	true	T	0	9	4
-/// 5d10eb9a-aae1-4db8-8ec6-7ebb34d32575	8	primary_forward	9	17	dummyI	0	T	true	T	3	12	7
-/// 5d10eb9a-aae1-4db8-8ec6-7ebb34d32575	8	primary_forward	9	17	dummyI	0	T	true	T	4	13	9
-/// 5d10eb9a-aae1-4db8-8ec6-7ebb34d32575	8	primary_forward	9	17	dummyI	0	T	true	T	7	16	6
-/// a4f36092-b4d5-47a9-813e-c22c3b477a0c	48	primary_forward	23	71	dummyIII	2	T	true	T	3	26	221
-/// a4f36092-b4d5-47a9-813e-c22c3b477a0c	48	primary_forward	23	71	dummyIII	2	T	true	T	8	31	242
-/// a4f36092-b4d5-47a9-813e-c22c3b477a0c	48	primary_forward	23	71	dummyIII	2	T	true	T	27	50	3
-/// a4f36092-b4d5-47a9-813e-c22c3b477a0c	48	primary_forward	23	71	dummyIII	2	T	true	T	39	62	47
-/// a4f36092-b4d5-47a9-813e-c22c3b477a0c	48	primary_forward	23	71	dummyIII	2	T	true	T	47	70	239
-/// fffffff1-10d2-49cb-8ca3-e8d48979001b	33	primary_reverse	3	36	dummyII	1	T	true	T	12	15	3
-/// fffffff1-10d2-49cb-8ca3-e8d48979001b	33	primary_reverse	3	36	dummyII	1	T	true	T	13	16	3
-/// fffffff1-10d2-49cb-8ca3-e8d48979001b	33	primary_reverse	3	36	dummyII	1	T	true	T	16	19	4
-/// fffffff1-10d2-49cb-8ca3-e8d48979001b	33	primary_reverse	3	36	dummyII	1	T	true	T	19	22	3
-/// fffffff1-10d2-49cb-8ca3-e8d48979001b	33	primary_reverse	3	36	dummyII	1	T	true	T	20	23	182
-/// a4f36092-b4d5-47a9-813e-c22c3b477a0c	48	unmapped					G	false	7200	28	-1	0
-/// a4f36092-b4d5-47a9-813e-c22c3b477a0c	48	unmapped					G	false	7200	29	-1	0
-/// a4f36092-b4d5-47a9-813e-c22c3b477a0c	48	unmapped					G	false	7200	30	-1	0
-/// a4f36092-b4d5-47a9-813e-c22c3b477a0c	48	unmapped					G	false	7200	32	-1	0
-/// a4f36092-b4d5-47a9-813e-c22c3b477a0c	48	unmapped					G	false	7200	43	-1	77
-/// a4f36092-b4d5-47a9-813e-c22c3b477a0c	48	unmapped					G	false	7200	44	-1	0
-/// a4f36092-b4d5-47a9-813e-c22c3b477a0c	48	unmapped					T	true	T	3	-1	221
-/// a4f36092-b4d5-47a9-813e-c22c3b477a0c	48	unmapped					T	true	T	8	-1	242
-/// a4f36092-b4d5-47a9-813e-c22c3b477a0c	48	unmapped					T	true	T	27	-1	0
-/// a4f36092-b4d5-47a9-813e-c22c3b477a0c	48	unmapped					T	true	T	39	-1	47
-/// a4f36092-b4d5-47a9-813e-c22c3b477a0c	48	unmapped					T	true	T	47	-1	239
+/// read_id	seq_len	mapq	alignment_type	align_start	align_end	contig	contig_id	base	is_strand_plus	mod_code	position	ref_position	mod_quality
+/// 5d10eb9a-aae1-4db8-8ec6-7ebb34d32575	8	255	primary_forward	9	17	dummyI	0	T	true	T	0	9	4
+/// 5d10eb9a-aae1-4db8-8ec6-7ebb34d32575	8	255	primary_forward	9	17	dummyI	0	T	true	T	3	12	7
+/// 5d10eb9a-aae1-4db8-8ec6-7ebb34d32575	8	255	primary_forward	9	17	dummyI	0	T	true	T	4	13	9
+/// 5d10eb9a-aae1-4db8-8ec6-7ebb34d32575	8	255	primary_forward	9	17	dummyI	0	T	true	T	7	16	6
+/// a4f36092-b4d5-47a9-813e-c22c3b477a0c	48	255	primary_forward	23	71	dummyIII	2	T	true	T	3	26	221
+/// a4f36092-b4d5-47a9-813e-c22c3b477a0c	48	255	primary_forward	23	71	dummyIII	2	T	true	T	8	31	242
+/// a4f36092-b4d5-47a9-813e-c22c3b477a0c	48	255	primary_forward	23	71	dummyIII	2	T	true	T	27	50	3
+/// a4f36092-b4d5-47a9-813e-c22c3b477a0c	48	255	primary_forward	23	71	dummyIII	2	T	true	T	39	62	47
+/// a4f36092-b4d5-47a9-813e-c22c3b477a0c	48	255	primary_forward	23	71	dummyIII	2	T	true	T	47	70	239
+/// fffffff1-10d2-49cb-8ca3-e8d48979001b	33	255	primary_reverse	3	36	dummyII	1	T	true	T	12	15	3
+/// fffffff1-10d2-49cb-8ca3-e8d48979001b	33	255	primary_reverse	3	36	dummyII	1	T	true	T	13	16	3
+/// fffffff1-10d2-49cb-8ca3-e8d48979001b	33	255	primary_reverse	3	36	dummyII	1	T	true	T	16	19	4
+/// fffffff1-10d2-49cb-8ca3-e8d48979001b	33	255	primary_reverse	3	36	dummyII	1	T	true	T	19	22	3
+/// fffffff1-10d2-49cb-8ca3-e8d48979001b	33	255	primary_reverse	3	36	dummyII	1	T	true	T	20	23	182
+/// a4f36092-b4d5-47a9-813e-c22c3b477a0c	48	0	unmapped					G	false	7200	28	-1	0
+/// a4f36092-b4d5-47a9-813e-c22c3b477a0c	48	0	unmapped					G	false	7200	29	-1	0
+/// a4f36092-b4d5-47a9-813e-c22c3b477a0c	48	0	unmapped					G	false	7200	30	-1	0
+/// a4f36092-b4d5-47a9-813e-c22c3b477a0c	48	0	unmapped					G	false	7200	32	-1	0
+/// a4f36092-b4d5-47a9-813e-c22c3b477a0c	48	0	unmapped					G	false	7200	43	-1	77
+/// a4f36092-b4d5-47a9-813e-c22c3b477a0c	48	0	unmapped					G	false	7200	44	-1	0
+/// a4f36092-b4d5-47a9-813e-c22c3b477a0c	48	0	unmapped					T	true	T	3	-1	221
+/// a4f36092-b4d5-47a9-813e-c22c3b477a0c	48	0	unmapped					T	true	T	8	-1	242
+/// a4f36092-b4d5-47a9-813e-c22c3b477a0c	48	0	unmapped					T	true	T	27	-1	0
+/// a4f36092-b4d5-47a9-813e-c22c3b477a0c	48	0	unmapped					T	true	T	39	-1	47
+/// a4f36092-b4d5-47a9-813e-c22c3b477a0c	48	0	unmapped					T	true	T	47	-1	239
 /// ```
 ///
 /// # Errors
@@ -859,6 +880,16 @@ fn polars_bam_mods(
 /// from a specified genomic region. The output DataFrame contains columns for read ID,
 /// sequence (with modifications shown as 'Z'), and base qualities.
 ///
+/// Only reads spanning the complete requested region are retained; partial overlaps
+/// are excluded. A bare contig name requires reads spanning the whole contig.
+/// Valid input with no matching reads returns a typed empty DataFrame.
+/// Length filters accept 0-4294967295, and threads must be 1-255.
+/// Regions require start < end and explicit ends at most 4294967294;
+/// omit the end (e.g. "chr1:0-") for an open-ended region.
+/// Tags must be one ASCII letter or a decimal code with no leading zeros (except "0"),
+/// at most seven digits, and a valid Unicode scalar value.
+/// URLs must use HTTP, HTTPS, or FTP.
+///
 /// # Args
 /// bam_path (str): Path to the BAM file. Must be associated with a BAM index.
 /// region (str): Genomic region from which to extract sequences. Required.
@@ -870,8 +901,8 @@ fn polars_bam_mods(
 ///     value. Defaults to unused.
 /// read_ids (optional, set of str): Only retrieve these read ids, defaults to unused.
 /// threads (optional, int): Number of threads used in some aspects of program execution, defaults to 2.
-/// include_zero_len (optional, bool): Include sequences of zero length. WARNING: our program
-///     may crash if you do this. Defaults to False.
+/// include_zero_len (optional, bool): Only False is supported (the default).
+///     True raises ValueError; zero-length reads cannot be enabled through this API.
 /// read_filter (optional, str): Comma-separated sequence of one to many of the following
 ///     strings: primary_forward, primary_reverse, secondary_forward, secondary_reverse,
 ///     supplementary_forward, supplementary_reverse, unmapped. If specified, only reads
@@ -1046,18 +1077,20 @@ fn seq_table(
     Ok(PyDataFrame(df))
 }
 
-/// Simulates a BAM file with or without modifications based on a JSON configuration.
-/// Creates both a BAM file and a corresponding FASTA reference file.
+/// Simulates a BAM or CRAM file with or without modifications from a JSON configuration.
+/// Creates a sorted, indexed alignment file and a corresponding FASTA reference file.
 ///
 /// This function takes a JSON configuration string that specifies how to generate
 /// synthetic sequencing data, including contig specifications, read parameters,
-/// and optional modification patterns. The output includes a sorted, indexed BAM
-/// file and a FASTA reference file.
+/// and optional modification patterns. The output extension selects BAM or CRAM 3.1.
+/// Output and sidecar paths must be distinct.
 ///
 /// # Args
 /// json_config (str): JSON string containing the simulation configuration.
 ///     Must conform to the `SimulationConfig` schema. The JSON should specify
 ///     (some inputs may be optional):
+///     - `seed`: Optional unsigned 64-bit integer for repeatable simulated data.
+///         If omitted, generated data varies between runs.
 ///     - `contigs`: Configuration for generating reference sequences
 ///         - `number`: Number of contigs to generate
 ///         - `len_range`: Range of contig lengths [min, max]
@@ -1068,18 +1101,24 @@ fn seq_table(
 ///         - `mapq_range`: Range of mapping quality values [min, max]
 ///         - `base_qual_range`: Range of base quality values [min, max]
 ///         - `len_range`: Range of read lengths as fraction of contig [min, max]
+///             before insertions, deletions, and barcodes are applied
 ///         - `barcode`: Optional barcode sequence
 ///         - `mods`: Optional array of modification specifications
-/// bam_path (str): Output path for the BAM file. If the file exists, it will be overwritten.
-///     A corresponding `.bai` index file will be created automatically.
+///             - `win`: Nonempty schedule of positive window sizes
+///             - `mod_range`: Nonempty schedule of modification-probability ranges
+///             - `mm_suffix`: "?" (default), ".", or "none" for the MM group suffix
+///             - `drop`: Optional schedule of omitted calls; each value must be <= min(win)
+/// bam_path (str): Output alignment path, ending in `.bam` or `.cram` (case-insensitive).
+///     If the file exists, it will be overwritten. Other extensions are rejected.
+///     A corresponding `.bai` (BAM) or `.crai` (CRAM) index is created automatically.
 /// fasta_path (str): Output path for the FASTA reference file. If the file exists,
-///     it will be overwritten.
+///     it will be overwritten. CRAM output also creates a `.fai` index and requires
+///     this external reference when reading the alignment file.
 ///
 /// # Returns
 ///
-/// Returns None on success. The function creates two files on disk:
-/// - A sorted, indexed BAM file at `bam_path` (with accompanying `.bai` index)
-/// - A FASTA reference file at `fasta_path`
+/// Returns None on success. Creates the alignment file, its index, and the FASTA
+/// reference (plus its FAI index for CRAM). Simulated unmapped reads have MAPQ 0.
 ///
 /// # Example
 ///
@@ -1169,7 +1208,7 @@ fn simulate_mod_bam(json_config: &str, bam_path: &str, fasta_path: &str) -> PyRe
 /// ```
 ///
 /// # Errors
-/// If the BAM file cannot be read or parsed
+/// If the BAM file cannot be read or parsed, or contains no records
 #[expect(
     clippy::doc_markdown,
     reason = "Python bindings use Python-style documentation conventions"

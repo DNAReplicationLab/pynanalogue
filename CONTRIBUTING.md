@@ -10,9 +10,11 @@ Please be respectful and constructive in all interactions with other contributor
 
 ### Prerequisites
 
-- Rust 1.70 or higher
+- Current stable Rust (edition 2024; a minimum supported Rust version for the full dependency stack has not been established)
 - Python 3.11 or higher
 - maturin for building Python wheels
+- Native build tools: a C compiler, clang/libclang for bindgen, pkg-config, and Perl
+- Development headers/libraries for compression (zlib, bzip2, xz), OpenSSL, and libcurl; package names vary by operating system
 
 ### Setting Up Your Development Environment
 
@@ -31,12 +33,12 @@ Please be respectful and constructive in all interactions with other contributor
 3. **Install development dependencies**:
    ```bash
    pip install maturin
-   pip install -e .[dev]  # Once optional dependencies are added
+   pip install -e '.[dev]' --config-settings=build-args=--locked
    ```
 
 4. **Build the project in development mode**:
    ```bash
-   maturin develop
+   maturin develop --locked
    ```
 
 5. **Verify the installation**:
@@ -50,7 +52,7 @@ Please be respectful and constructive in all interactions with other contributor
 
 #### Rust Code
 - Follow standard Rust formatting: run `cargo fmt` before committing
-- Pass all clippy lints: `cargo clippy --all-targets --all-features -- -D warnings`
+- Pass all clippy lints: `cargo clippy --locked --all-targets --all-features -- -D warnings`
 - This project uses 80+ strict clippy lints - they're intentional and helpful for code quality
 - All code files should start with a brief 2-line comment explaining what the file does
 - Add proper documentation to public APIs
@@ -77,7 +79,7 @@ This project follows Test-Driven Development (TDD) principles:
 
 **Rust tests**:
 ```bash
-cargo test
+cargo test --locked
 ```
 
 **Python tests**:
@@ -101,20 +103,20 @@ ruff format --check tests/     # Check formatting without changing files
 
 ### Building the Project
 
-**Development build** (faster, with debug symbols):
+**Development build** (unoptimized; debug symbols are disabled by the repository's dev profile):
 ```bash
-maturin develop
+maturin develop --locked
 ```
 
 **Release build** (optimized):
 ```bash
-maturin build --release
+maturin build --release --locked
 ```
 
 **Check for issues without building**:
 ```bash
-cargo check
-cargo clippy
+cargo check --locked
+cargo clippy --locked
 ```
 
 ### Commit Messages
@@ -150,8 +152,8 @@ Fixes #42
    ```bash
    # Rust checks
    cargo fmt
-   cargo clippy --all-targets --all-features -- -D warnings
-   cargo test
+   cargo clippy --locked --all-targets --all-features -- -D warnings
+   cargo test --locked
 
    # Python checks
    ruff check tests/
@@ -215,19 +217,10 @@ Good documentation is essential:
 
 ## Development Dependencies
 
-When adding development dependencies, use optional dependency groups:
+The existing `dev` optional dependency group in `pyproject.toml` includes pytest,
+pytest-cov, pytest-benchmark, and ruff. Add development dependencies there.
 
-```toml
-[project.optional-dependencies]
-dev = [
-    "pytest>=7.0",
-    "pytest-cov",
-    "pytest-benchmark",
-    "ruff>=0.1.0",
-]
-```
-
-Install with: `pip install -e .[dev]`
+Install with: `pip install -e '.[dev]' --config-settings=build-args=--locked`
 
 ## Design Philosophy
 

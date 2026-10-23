@@ -13,15 +13,27 @@ BAM_FORWARD = str(TEST_DIR / "example_pynanalogue_1.bam")
 BAM_FIRST_READ_REV = str(TEST_DIR / "example_pynanalogue_1_first_read_rev.bam")
 
 
-def test_seq_table_empty_preserves_schema():
-    """A valid region without fully spanning reads returns a typed empty table."""
+@pytest.mark.parametrize(
+    "region,expected_rows",
+    [
+        pytest.param("dummyI:9-17", 1, id="exact-alignment"),
+        pytest.param("dummyI:10-16", 1, id="inside-alignment"),
+        pytest.param("dummyI:8-17", 0, id="extends-left"),
+        pytest.param("dummyI:9-18", 0, id="extends-right"),
+        pytest.param("dummyI:9-", 0, id="open-ended"),
+        pytest.param("dummyI", 0, id="whole-contig"),
+    ],
+)
+def test_seq_table_requires_full_region_and_preserves_schema(region, expected_rows):
+    """Only fully spanning alignments are retained, with a stable empty schema."""
+    # This fixture's only dummyI alignment spans [9, 17).
     bam = str(TEST_DIR / "example_1.bam")
-    full = pynanalogue.seq_table(bam, region="dummyI:9-17")
-    assert full.height > 0
-
-    df = pynanalogue.seq_table(bam, region="dummyI")
-    assert df.height == 0
-    assert list(df.schema.items()) == list(full.schema.items())
+    df = pynanalogue.seq_table(bam, region=region)
+    assert df.height == expected_rows
+    assert df["read_id"].to_list() == (
+        ["5d10eb9a-aae1-4db8-8ec6-7ebb34d32575"] if expected_rows else []
+    )
+    assert df.columns == ["read_id", "sequence", "qualities"]
     assert df.schema == {
         "read_id": pl.String,
         "sequence": pl.String,

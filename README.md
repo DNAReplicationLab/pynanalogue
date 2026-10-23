@@ -14,10 +14,11 @@ to extract and process this information, with a particular focus on single-molec
 aspects and DNA/RNA modifications. Despite this focus, some of pynanalogue's functions are
 quite general and can be applied to almost any BAM file.
 
-We can process any type of DNA/RNA modifications occuring in any pattern (single/multiple mods,
-spatially-isolated/non-isolated etc.). All we require is that the data is stored
-in a BAM file in the mod BAM format (i.e. using MM/ML tags as laid down in the
-[specifications](https://samtools.github.io/hts-specs/SAMtags.pdf)).
+We process DNA/RNA modifications in varied patterns (single/multiple mods,
+spatially-isolated/non-isolated etc.) stored in the mod BAM format using MM/ML tags
+as laid down in the [specifications](https://samtools.github.io/hts-specs/SAMtags.pdf).
+Inputs must also meet the validation and resource limits described under
+[Filtering Options](#filtering-options).
 
 ## Table of Contents
 
@@ -54,7 +55,8 @@ But the table of contents is correct.
 # Requirements
 
 - Python 3.11 or higher
-- Rust toolchain (for building from source)
+- Current stable Rust and native build dependencies (for building from source;
+  see [CONTRIBUTING.md](CONTRIBUTING.md))
 
 # Installation
 
@@ -199,6 +201,8 @@ This is the same field used by `mapq_filter` and `exclude_mapq_unavail`.
 ## Window reads
 
 Output windowed modification densities of reads as a polars dataframe.
+`win` counts retained modification-data positions after filtering, separately for
+each base, strand, and modification type.
 In this section, we show how to get documentation about the function,
 a sample execution, and a sample output snippet.
 
@@ -260,6 +264,8 @@ The `window_reads` function supports a `win_op` parameter that controls the wind
 By default, `win_op="density"` reports the modification density within each window.
 Setting `win_op="grad_density"` instead reports the gradient (slope) of modification density
 within each window, which can be useful for detecting transitions in modification patterns.
+The slope is measured per retained modification-data position, and gradient mode
+requires at least two positions per window.
 
 <!-- TEST CODE: START gradient_mode -->
 ```python
@@ -332,6 +338,8 @@ Extract read sequences and base qualities for a genomic region as a Polars DataF
 This function is useful for retrieving sequences from a particular region
 with modification information overlaid. If mods are not present or the modification
 probabilities are not high enough, then they are not shown.
+Only reads spanning the complete requested region are retained; partial overlaps
+are excluded. A bare contig name therefore requires reads spanning the whole contig.
 Insertions are shown as lowercase letters, deletions as periods (`.`),
 and modified bases as `Z` (or `z` for modifications in insertions).
 
@@ -457,6 +465,18 @@ If you are a developer who needs BAM files with defined single-molecule modifica
 to help develop/test your tool, nanalogue can also help you create BAM files from scratch
 using artificial data created using parameters defined by you.
 
+Despite its name, `simulate_mod_bam` writes either BAM (`.bam`, with a BAI index)
+or CRAM 3.1 (`.cram`, with a CRAI index), selected by the case-insensitive output
+filename extension. Other extensions are rejected. Both formats produce a FASTA
+reference; CRAM also produces its FAI index and needs that reference for reading.
+
+The JSON accepts an optional top-level `seed` (an unsigned 64-bit integer) for
+repeatable simulated data; without it, data varies between runs. Modification
+specifications support `mm_suffix` (`"?"`, `"."`, or `"none"`) and a `drop` schedule
+for omitting calls. `win` must be nonempty and positive, `mod_range` must be
+nonempty, and each `drop` value must be at most the smallest `win` value.
+Simulated unmapped reads have MAPQ 0.
+
 ```python
 import pynanalogue as pn
 print(pn.simulate_mod_bam.__doc__)
@@ -470,7 +490,7 @@ as shown. In this example, the reads are methylated, with 5Cs with a probability
 range 30-70% and three Cs with a probability in the range 10%-50%. This 5C, 3C pattern repeats throughout
 the read. You can then analyze this pattern with your tool and test its functionality.
 You can set up multiple modifications etc. Please have a look at the documentation
-[here](https://docs.rs/nanalogue/latest/nanalogue_core/simulate_mod_bam/index.html) for the options
+[here](https://docs.rs/nanalogue/0.2.1/nanalogue_core/simulate_mod_bam/index.html) for the options
 available in the json configuration.
 
 <!-- TEST CODE: NOOUTPUT simulate_mod_bam -->
@@ -521,25 +541,33 @@ are documented in each function's section above.
 
 | Option | Type | Default | Description |
 |--------|------|---------|-------------|
-| `treat_as_url` | bool | False | Treat `bam_path` as a URL instead of a file path |
-| `region` | str | "" | Genomic region filter (e.g. "chr1:1000-2000"). Format: "contig", "contig:start-", or "contig:start-end" (0-based, half-open) |
+| `treat_as_url` | bool | False | Treat `bam_path` as an HTTP, HTTPS, or FTP URL instead of a file path |
+| `region` | str | "" | Genomic region filter (e.g. "chr1:1000-2000"). Format: "contig", "contig:start-", or "contig:start-end" (0-based, half-open; start < end). Omit the end for an open-ended region |
 | `full_region` | bool | False | Only include reads that fully span the region |
 | `read_filter` | str | "" | Comma-separated alignment types to retain (e.g. "primary_forward,primary_reverse,unmapped") |
 | `read_ids` | set[str] | {} | Restrict to specific read IDs |
 | `min_seq_len` | int | 0 | Minimum sequence length |
-| `min_align_len` | int | 0 | Minimum alignment length |
+| `min_align_len` | int | 0 | Minimum alignment length (0 disables this filter) |
 | `mapq_filter` | int | 0 | Minimum mapping quality |
 | `exclude_mapq_unavail` | bool | False | Exclude reads without mapping quality |
-| `include_zero_len` | bool | False | Include zero-length sequences (experimental, may crash) |
+| `include_zero_len` | bool | False | Only False is supported; True raises ValueError |
 | `sample_fraction` | float | 1.0 | Subsample reads with this probability (0.0 to 1.0, unseeded) |
-| `threads` | int | 2 | Number of threads for BAM reading |
-| `tag` | str | "" | Filter by modification type (e.g. "m" for 5mC, or a ChEBI code like "76792") |
+| `threads` | int | 2 | Number of threads for BAM reading (1–255) |
+| `tag` | str | "" | Filter by modification type: one ASCII letter (e.g. "m") or a decimal code (e.g. "76792") |
 | `mod_strand` | str | "" | Filter by modification strand: "bc" (basecalled) or "bc_comp" (complement) |
 | `min_mod_qual` | int | 0 | Minimum modification quality threshold (0-255) |
 | `reject_mod_qual_non_inclusive` | (int, int) | (0, 0) | Reject mods where low < probability < high (0-255 scale) |
 | `trim_read_ends_mod` | int | 0 | Trim modification info from this many bp at each read end |
 | `base_qual_filter_mod` | int | 0 | Minimum basecalling quality for modification data |
 | `mod_region` | str | "" | Restrict modification data to a genomic region (same format as `region`) |
+
+Input validation limits read sequences to 16,777,215 bases, contigs to
+4,294,967,294 bases, and modification groups to 20 per record. Read IDs and contig
+names have a 200-byte limit and must satisfy the upstream safe-identifier rules;
+see the [nanalogue 0.2.1 validation documentation](https://docs.rs/nanalogue/0.2.1/nanalogue_core/utils/resource_protector/index.html).
+Malformed or inconsistent MM/ML/MN tags are rejected. HTTPS access through
+HTSlib/libcurl/OpenSSL requires an up-to-date system or custom CA bundle;
+upgrading this package does not update that bundle.
 
 # Further documentation
 
