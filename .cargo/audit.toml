@@ -1,0 +1,18 @@
+# Keep advisory exceptions specific to the enabled dependency graph.
+# Recheck inactive dependencies when enabling features or upgrading Polars.
+[advisories]
+ignore = [
+    # bincode is in Cargo.lock but absent from the enabled dependency tree.
+    "RUSTSEC-2025-0141", # bincode unmaintained
+    # Accept the maintenance-only advisory inherited through rust-htslib.
+    # Revisit when rust-htslib replaces custom_derive; no released fix exists.
+    "RUSTSEC-2025-0058", # custom_derive unmaintained
+    # quick-xml is in Cargo.lock but absent from the enabled dependency tree.
+    # Revisit when Polars is upgraded to permit a patched quick-xml release.
+    "RUSTSEC-2026-0194", # quick-xml quadratic runtime on duplicate attributes
+    "RUSTSEC-2026-0195", # quick-xml unbounded namespace-declaration allocation
+    # Source-level review found no reachable call through our current APIs.
+    # See SECURITY.md: PyO3 advisory exceptions, including review triggers.
+    "RUSTSEC-2026-0176", # PyList/PyTuple iterator nth/nth_back arithmetic
+    "RUSTSEC-2026-0177", # PyCFunction::new_closure missing Sync bound
+]

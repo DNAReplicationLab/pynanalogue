@@ -10,7 +10,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
 - Mapping quality (`mapq`) in `read_info()` JSON output and `polars_bam_mods()` DataFrames, with updated documentation and examples
 - Regression tests for numeric input limits, MAPQ filtering, exact output schemas (including empty results), and propagation of analysis errors
-- Dependency-security CI on pull requests, main-branch pushes, weekly schedules, and manual runs using pinned cargo-audit and cargo-deny versions (advisories, bans, and sources; no license policy or advisory exceptions)
+- Dependency-security CI on pull requests, main-branch pushes, weekly schedules, and manual runs using pinned cargo-audit and cargo-deny versions (advisories, bans, and sources; no license policy)
+- Explicit advisory exceptions for unmaintained custom_derive in both security tools, and for inactive bincode and quick-xml dependencies in cargo-audit, with documented reasons and conditions for revisiting them
+- Scoped exceptions for PyO3 advisories RUSTSEC-2026-0176 and RUSTSEC-2026-0177 in both security tools, backed by a documented reachability investigation in SECURITY.md
 
 ### Changed
 - Updated nanalogue from 0.1.7 through 0.1.11 to an exact 0.2.0 dependency with its `polars` feature enabled, and refreshed Cargo.lock
@@ -26,6 +28,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Hardened CI shell interpolation, pinned Linux container images by digest, documented publishing permissions, replaced redundant Rust setup actions, and limited concurrent runs while preserving active publications
 
 ### Fixed
+- Updated compatible transitive dependencies to resolve security advisories and replace yanked chacha20 0.10.1; remaining PyO3 and quick-xml advisories have documented exceptions rather than dependency fixes
 - Return typed, zero-row DataFrames from `window_reads()` and `seq_table()` when filtering leaves no records, or windowing yields no rows; unrelated processing errors still propagate
 - Fixed musl benchmark CI builds by installing Alpine-compatible Clang 20 and its development libraries, LLVM, and Perl, and configuring Clang/libclang paths
 
