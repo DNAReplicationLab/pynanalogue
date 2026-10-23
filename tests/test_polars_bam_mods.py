@@ -1,10 +1,11 @@
 # Tests for pynanalogue.polars_bam_mods() function
 # Validates Polars DataFrame output, filtering, and integration with example data
 
-import pytest
 from pathlib import Path
+
 import polars as pl
 import pynanalogue
+import pytest
 
 
 def _test_polars_bam_mods_against_expected(example_number):
@@ -115,5 +116,5 @@ def test_polars_bam_mods_filters(simple_bam):
 
 def test_polars_bam_mods_invalid_path():
     """Test proper error handling for missing files"""
-    with pytest.raises(Exception):  # Update with specific exception
+    with pytest.raises(OSError):
         pynanalogue.polars_bam_mods("/nonexistent/path.bam")

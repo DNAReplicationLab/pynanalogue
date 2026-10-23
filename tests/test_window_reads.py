@@ -3,9 +3,10 @@
 
 from io import StringIO
 from pathlib import Path
+
 import polars as pl
-import pytest
 import pynanalogue
+import pytest
 
 
 def _test_window_reads_against_expected(example_number):

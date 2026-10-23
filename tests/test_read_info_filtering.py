@@ -1,13 +1,13 @@
 # Testing filtering parameters for read_info function
 # Uses dataclass pattern for managing many-parameter test cases
 
-from collections import Counter
-from dataclasses import dataclass, field, replace
-from typing import Set
 import json
 import re
-import pytest
+from collections import Counter
+from dataclasses import dataclass, field, replace
+
 import pynanalogue
+import pytest
 
 
 def decode_read_info(result_bytes: bytes) -> list:
@@ -55,7 +55,7 @@ class InputOptions:
     treat_as_url: bool = False
     min_seq_len: int = 0
     min_align_len: int = 0
-    read_ids: Set[str] = field(default_factory=set)
+    read_ids: set[str] = field(default_factory=set)
     threads: int = 2
     include_zero_len: bool = False
     read_filter: str = ""

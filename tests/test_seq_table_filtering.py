@@ -1,12 +1,12 @@
 # Testing filtering parameters for seq_table function
 # Uses dataclass pattern for managing many-parameter test cases
 
-from dataclasses import dataclass, field, replace
-from typing import Set
 import json
+from dataclasses import dataclass, field, replace
+
 import polars as pl
-import pytest
 import pynanalogue
+import pytest
 
 
 def get_row_count(df: pl.DataFrame) -> int:
@@ -57,7 +57,7 @@ class SeqTableInputOptions:
     treat_as_url: bool = False
     min_seq_len: int = 0
     min_align_len: int = 0
-    read_ids: Set[str] = field(default_factory=set)
+    read_ids: set[str] = field(default_factory=set)
     threads: int = 2
     include_zero_len: bool = False
     read_filter: str = ""

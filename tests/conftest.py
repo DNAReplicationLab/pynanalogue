@@ -1,11 +1,12 @@
 # Pytest configuration and shared fixtures for pynanalogue tests
 # Provides reusable test fixtures including BAM file generation
 
-import pytest
 import json
 from pathlib import Path
 from uuid import uuid4
+
 import pynanalogue
+import pytest
 
 
 def _generate_bam_from_config(tmp_path, config_name, prefix="test"):

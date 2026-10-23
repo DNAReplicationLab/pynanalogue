@@ -2,10 +2,10 @@
 # Uses dataclass pattern for managing many-parameter test cases
 
 from dataclasses import dataclass, field, replace
-from typing import Set
-import pytest
+
 import polars as pl
 import pynanalogue
+import pytest
 
 
 @dataclass
@@ -23,7 +23,7 @@ class TestInputOptions:
     treat_as_url: bool = False
     min_seq_len: int = 0
     min_align_len: int = 0
-    read_ids: Set[str] = field(default_factory=set)
+    read_ids: set[str] = field(default_factory=set)
     threads: int = 2
     include_zero_len: bool = False
     read_filter: str = ""

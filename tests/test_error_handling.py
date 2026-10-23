@@ -1,8 +1,8 @@
 # Tests for error handling in pynanalogue Python bindings
 # Focuses on PyO3 interface errors, not business logic errors
 
-import pytest
 import pynanalogue
+import pytest
 
 # This test file validates Python-Rust binding error handling -
 # focusing only on errors that occur at the PyO3 interface layer,

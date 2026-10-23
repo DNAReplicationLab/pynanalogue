@@ -2,10 +2,10 @@
 # Validates sequence extraction from BAM files with modification markers
 
 from pathlib import Path
-import polars as pl
-import pytest
-import pynanalogue
 
+import polars as pl
+import pynanalogue
+import pytest
 
 # Test data paths
 TEST_DIR = Path(__file__).parent / "data" / "examples"

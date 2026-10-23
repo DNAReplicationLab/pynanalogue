@@ -29,6 +29,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 - Updated compatible transitive dependencies to resolve security advisories and replace yanked chacha20 0.10.1; remaining PyO3 and quick-xml advisories have documented exceptions rather than dependency fixes
+- Fixed builds on Rust 1.99 by updating ethnum to 1.5.3, and resolved Ruff findings in test imports, set annotations, and the missing-file exception assertion
 - Return typed, zero-row DataFrames from `window_reads()` and `seq_table()` when filtering leaves no records, or windowing yields no rows; unrelated processing errors still propagate
 - Fixed musl benchmark CI builds by installing Alpine-compatible Clang 20 and its development libraries, LLVM, and Perl, and configuring Clang/libclang paths
 
