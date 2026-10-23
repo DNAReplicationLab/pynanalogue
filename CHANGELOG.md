@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.2.1] - 2026-10-23
+
 ### Added
 - Mapping quality (`mapq`) in `read_info()` JSON output and `polars_bam_mods()` DataFrames, with updated documentation and examples
 - Regression tests for numeric input limits, MAPQ filtering, exact output schemas (including empty results), and propagation of analysis errors
@@ -15,7 +17,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Scoped exceptions for PyO3 advisories RUSTSEC-2026-0176 and RUSTSEC-2026-0177 in both security tools, backed by a documented reachability investigation in SECURITY.md
 
 ### Changed
-- Updated nanalogue from 0.1.7 through 0.1.11 to an exact 0.2.0 dependency with its `polars` feature enabled, and refreshed Cargo.lock
+- Updated nanalogue from 0.1.7 through 0.1.11 and 0.2.0 to an exact 0.2.1 dependency with its `polars` feature enabled, refreshed Cargo.lock, and reassessed the existing advisory exceptions
 - Updated Rust dependencies: polars to 0.53, rust-htslib to 1.0.0, pyo3 to 0.27, and pyo3-polars to 0.26.0
 - Changed Polars output types from `UInt64` to `UInt32` for `window_reads()` columns `win_start` and `win_end`, and `polars_bam_mods()` columns `seq_len`, `align_start`, `align_end`, and `position`
 - Limited `min_seq_len`, `min_align_len`, `win`, and `step` to at most 4294967295 (u32::MAX); larger values now raise `ValueError`

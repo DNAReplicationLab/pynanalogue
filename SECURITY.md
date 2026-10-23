@@ -90,6 +90,40 @@ The inspected installed development extension also had no symbols for the
 affected iterator methods or closure constructor/trampoline. This corroborated
 the source review; symbol absence alone was not treated as proof.
 
+#### Reassessment for nanalogue 0.2.1 (2026-10-23)
+
+The [upgrade reassessment](https://ampcode.com/threads/T-01a168d6-aff0-75df-8eb8-e8c2db3785c5)
+retained both exceptions for nanalogue 0.2.1 with the same Polars, pyo3-polars,
+PyO3, ABI and extension-module versions/features listed above. The published
+nanalogue 0.2.0 and 0.2.1 manifests have identical dependency requirements and
+features. Its changed iterator paths operate on Rust slices, arrays and ranges,
+not Python containers; it introduces no PyO3 calls. The binding's six public
+signatures and their extraction, output conversion, registration and error paths
+remain unchanged. Archive checksums and every extracted published regular file
+were verified for nanalogue 0.2.1, PyO3, pyo3-macros-backend, pyo3-polars and
+polars-error. The old nanalogue archive also matched its previous lock checksum.
+
+On Rust 1.99.1, `RUSTC_BOOTSTRAP=pynanalogue cargo rustc --locked --features
+pyo3/extension-module --lib -- -Zunpretty=expanded` confirmed all six wrappers
+still use FASTCALL, with no tuple/dict wrapper or closure constructor/trampoline.
+The rebuilt development extension installed for Python 3.11 matched the inspected
+build's SHA256 and again lacked affected iterator/closure symbols; static
+function registration and ordinary tuple `next` symbols were present.
+
+The audit used cargo-audit 0.22.2 and cargo-deny 0.20.2 with RustSec database
+revision `f7b2f6bc663452200bbe639ebb75e0c762b3422b` (2026-10-23). An isolated
+lockfile scan with **no ignores** still reported only the two PyO3 advisories,
+quick-xml's RUSTSEC-2026-0194/0195, and the bincode/custom_derive maintenance
+warnings. `cargo tree --locked --all-features --target all -i` confirmed that
+quick-xml and bincode remain inactive. **custom_derive is active** through
+rust-htslib; its exception accepts an unmaintained dependency, not unreachable
+code. With the existing exceptions, `cargo audit --json` reported no unignored
+vulnerabilities or warnings, and
+`cargo deny --locked check advisories bans sources` passed, also when explicitly
+enabling `pyo3/extension-module`. No exception IDs were added or removed.
+Upgrading nanalogue does not inherit its own published Cargo.lock or fix these
+remaining advisories in this consumer's dependency graph.
+
 This assessment covers PyO3 linked into this binding under the reviewed API and
 features. It is not a formal whole-program proof or a security assessment of
 Python Polars' separate native runtime or other extensions in the Python process.

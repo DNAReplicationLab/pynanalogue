@@ -1700,9 +1700,9 @@ dependencies = [
 
 [[package]]
 name = "nanalogue"
-version = "0.2.0"
+version = "0.2.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "77ed2fe4bc76ef02b0b3bea3e4a649790874bbcc63634065e08bd9c2aef21bc7"
+checksum = "a97a2f4cc32d31de3698f47bd91c15b465bd08760cae4680faeb3eb98f282f2d"
 dependencies = [
  "bio-types",
  "clap",
@@ -2533,7 +2533,7 @@ dependencies = [
 
 [[package]]
 name = "pynanalogue"
-version = "0.1.7"
+version = "0.2.1"
 dependencies = [
  "nanalogue",
  "polars",
