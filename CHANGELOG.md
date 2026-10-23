@@ -41,6 +41,7 @@ compatibility details under Changed below. Python function signatures are unchan
 - Hardened CI shell interpolation, pinned Linux container images by digest, documented publishing permissions, replaced redundant Rust setup actions, and limited concurrent runs while preserving active publications
 
 ### Fixed
+- Build Linux release wheels on Ubuntu using maturin's cargo-zigbuild integration, with matching clang/libclang for HTSlib bindings and the x86_64 libdeflate compatibility flags; retain the existing manylinux and musllinux targets
 - Reject malformed MM/ML/MN data instead of panicking or silently accepting inconsistent records; handle canonical `U` as BAM-encoded `T`, support padding (`P`) CIGAR operations, and validate explicitly empty MM tags
 - Fixed `mod_region` filtering when the requested region contains or exactly matches the whole read alignment: terminal soft-clipped modification calls are excluded, while insertions between retained calls are still kept
 - Reject invalid simulation schedules and aliased output paths before writing output
