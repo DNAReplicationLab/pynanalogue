@@ -7,7 +7,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-## [0.2.1] - 2026-10-23
+## [0.2.1] - 2026-10-26
 
 **Upgrading from 0.1.7:** Python 3.11 or newer is now required. Several DataFrame
 columns use narrower integer types, and input validation is stricter; see the
@@ -17,6 +17,7 @@ compatibility details under Changed below. Python function signatures are unchan
 - Mapping quality (`mapq`) in `read_info()` JSON output and `polars_bam_mods()` DataFrames, with updated documentation and examples
 - `simulate_mod_bam()` accepts a JSON `seed` for reproducible simulation and `mm_suffix`/`drop` modification options; a `.cram` output filename selects CRAM 3.1 output with a generated reference and index
 - Default-on build-only option for manual release workflow runs (CI-only; no package-code changes), retaining wheels and source archives as artifacts without publishing to PyPI
+- Manual wheel smoke-test workflow (CI-only; no package-code changes) that tests existing build artifacts on native Linux/macOS architectures without rebuilding or publishing
 - Regression tests for numeric input limits, MAPQ filtering, exact output schemas (including empty results), and propagation of analysis errors
 - Dependency-security CI on pull requests, main-branch pushes, weekly schedules, and manual runs using pinned cargo-audit and cargo-deny versions (advisories, bans, and sources; no license policy)
 - Explicit advisory exceptions for unmaintained custom_derive in both security tools, and for inactive bincode and quick-xml dependencies in cargo-audit, with documented reasons and conditions for revisiting them

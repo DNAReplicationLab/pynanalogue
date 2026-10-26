@@ -101,6 +101,24 @@ ruff format --check tests/     # Check formatting without changing files
 - Unit tests should cover individual functions and edge cases
 - Integration tests should verify end-to-end functionality
 
+#### Smoke-testing release wheels
+
+Run **Smoke-test built wheels** manually in GitHub Actions and enter the run ID
+of a successful **Build Wheels and Publish to PyPI** run (including build-only
+runs). The artifacts must still be available.
+
+This installs the existing wheels in fresh environments on native x86_64 and
+ARM64 Linux and macOS runners, using matching manylinux/musllinux containers on
+Linux. It checks the installed version against the build revision and runs that
+revision's functional tests, including all six APIs and simulation/read-back,
+on Python 3.11 (the stable ABI baseline). Benchmarks are excluded. Runtime
+dependencies are resolved from PyPI as binary wheels; this is not a minimum
+dependency-version test.
+
+The workflow does not rebuild, publish, or change tags. It is a separate manual
+check, not yet a publishing gate; it does not test the source distribution or
+every supported Python version.
+
 ### Building the Project
 
 **Development build** (unoptimized; debug symbols are disabled by the repository's dev profile):

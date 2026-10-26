@@ -1,0 +1,126 @@
+name: Smoke-test built wheels
+
+on:
+  workflow_dispatch:
+    inputs:
+      build_run_id:
+        description: "Successful Build Wheels and Publish to PyPI run ID"
+        required: true
+        type: string
+
+permissions:
+  contents: read
+  actions: read # Inspect the selected build run and download its artifacts.
+
+concurrency:
+  group: smoke-test-wheels-${{ inputs.build_run_id }}
+  # Finish active checks before starting another run for the same build.
+  cancel-in-progress: false
+
+jobs:
+  build_info:
+    name: Validate source build
+    runs-on: ubuntu-24.04
+    outputs:
+      sha: ${{ steps.build.outputs.sha }}
+    steps:
+      - name: Verify the selected run
+        id: build
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          BUILD_RUN_ID: ${{ inputs.build_run_id }}
+        run: |
+          set -euo pipefail
+          [[ "$BUILD_RUN_ID" =~ ^[1-9][0-9]*$ ]] || { echo "Expected a numeric run ID" >&2; exit 1; }
+          gh api "repos/$GH_REPO/actions/runs/$BUILD_RUN_ID" > run.json
+          jq -e '.status == "completed" and .conclusion == "success"
+            and .path == ".github/workflows/publish_to_pypi.yml"
+            and (.event == "workflow_dispatch" or .event == "release")
+            and (.head_sha | test("^[0-9a-f]{40}$"))' run.json
+          echo "sha=$(jq -r .head_sha run.json)" >> "$GITHUB_OUTPUT"
+          {
+            echo "Testing artifacts from $(jq -r .html_url run.json)"
+            echo "Source revision: $(jq -r .head_sha run.json)"
+          } >> "$GITHUB_STEP_SUMMARY"
+
+  smoke:
+    name: ${{ matrix.artifact }} (Python 3.11)
+    needs: build_info
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - artifact: wheels-manylinux2014-x86_64-unknown-linux-gnu
+            runner: ubuntu-24.04
+            image: quay.io/pypa/manylinux2014_x86_64@sha256:11bc811a51ff4c24d3403f1a6d2ecbaaf0d2e8fafb8f7cf6549e22b59f94dfc2
+          - artifact: wheels-manylinux2014-aarch64-unknown-linux-gnu
+            runner: ubuntu-24.04-arm
+            image: quay.io/pypa/manylinux2014_aarch64@sha256:fa00197d8f463b1fb78ae6be9f059b7b11ae35ca4f38a8a86d79eb02f97183be
+          - artifact: wheels-manylinux_2_28-x86_64-unknown-linux-gnu
+            runner: ubuntu-24.04
+            image: quay.io/pypa/manylinux_2_28_x86_64@sha256:f6adcfd450f0927a05c66ded9b4c3bb538fbab625b1ca3f35d71ac093b24b57f
+          - artifact: wheels-manylinux_2_28-aarch64-unknown-linux-gnu
+            runner: ubuntu-24.04-arm
+            image: quay.io/pypa/manylinux_2_28_aarch64@sha256:84176c47944bf8617a42bb0b9087232453d3c05875a1153645c54a6ba30a8162
+          - artifact: wheels-manylinux_2_34-x86_64-unknown-linux-gnu
+            runner: ubuntu-24.04
+            image: quay.io/pypa/manylinux_2_34_x86_64@sha256:fb501b3bde5ee751f2f4897678c5a82359448efb278b1718e8d375efe874b75f
+          - artifact: wheels-manylinux_2_34-aarch64-unknown-linux-gnu
+            runner: ubuntu-24.04-arm
+            image: quay.io/pypa/manylinux_2_34_aarch64@sha256:1926f7dd54ebef2fe052c9c60315a59f1a084f46f7c824c60e17ca39bdba3396
+          - artifact: wheels-musllinux_1_2-x86_64-unknown-linux-musl
+            runner: ubuntu-24.04
+            image: quay.io/pypa/musllinux_1_2_x86_64@sha256:f44bbec9c55a3caec6db3aa48014280c418e42d8269ee04730b8992f95ba422b
+          - artifact: wheels-musllinux_1_2-aarch64-unknown-linux-musl
+            runner: ubuntu-24.04-arm
+            image: quay.io/pypa/musllinux_1_2_aarch64@sha256:cb9cdafeddca9c8695c98260e71f27097d47c1c6a383f1f2ea39d528b4bd7680
+          - artifact: wheels-macos-15-intel
+            runner: macos-15-intel
+          - artifact: wheels-macos-latest
+            runner: macos-15
+
+    steps:
+      - name: Checkout smoke-test tooling
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.1.0
+        with:
+          persist-credentials: false
+
+      - name: Checkout tests from the build revision
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.1.0
+        with:
+          ref: ${{ needs.build_info.outputs.sha }}
+          path: source
+          persist-credentials: false
+
+      - name: Download the existing wheel
+        uses: actions/download-artifact@018cc2cf5baa6db3ef3c5f8a56943fffe632ef53 # v6.0.0
+        with:
+          name: ${{ matrix.artifact }}
+          path: wheel
+          run-id: ${{ inputs.build_run_id }}
+          github-token: ${{ github.token }}
+
+      # Run Docker from the host so checkout/download actions do not need a
+      # Node runtime compatible with the old glibc or musl container.
+      - name: Test Linux wheel in its matching runtime
+        if: runner.os == 'Linux'
+        env:
+          IMAGE: ${{ matrix.image }}
+        run: |
+          docker run --rm --mount "type=bind,src=$GITHUB_WORKSPACE,dst=/workspace,readonly" \
+            --env PYTHON=/opt/python/cp311-cp311/bin/python \
+            "$IMAGE" bash /workspace/.github/scripts/smoke_test_wheel.sh \
+            /workspace/wheel /workspace/source
+
+      - name: Set up Python 3.11 on macOS
+        if: runner.os == 'macOS'
+        uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6.3.0
+        with:
+          python-version: "3.11"
+
+      - name: Test macOS wheel
+        if: runner.os == 'macOS'
+        run: bash .github/scripts/smoke_test_wheel.sh "$GITHUB_WORKSPACE/wheel" "$GITHUB_WORKSPACE/source"
